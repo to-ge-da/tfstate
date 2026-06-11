@@ -17,6 +17,10 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 ## Installation
 
 ```bash
+# Using uv
+uv tool install tf-state-debug
+
+# Using pip
 pip install tf-state-debug
 ```
 
