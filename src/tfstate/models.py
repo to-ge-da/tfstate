@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any
 
 
 class Instance(BaseModel):
@@ -32,9 +32,9 @@ class Resource(BaseModel):
 
 class StateOutput(BaseModel):
     name: str
-    value: dict = Field(default_factory=dict)
+    value: Any = Field(default_factory=dict)
     sensitive: bool = False
-    type: str = "string"
+    type: Any = "string"
 
 
 class State(BaseModel):
