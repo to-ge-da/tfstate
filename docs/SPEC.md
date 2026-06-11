@@ -386,14 +386,14 @@ tfstate/
 
 ## Implementation Phases
 
-### Phase 1: Foundation (v0.1.0)
+### Phase 1: Foundation (v0.1.0) ✅
 
-- [ ] Project setup (pyproject.toml, structure)
-- [ ] State parsing and models
-- [ ] `show` command
-- [ ] `list` command
-- [ ] `pull` command (S3 support)
-- [ ] Basic test coverage
+- [x] Project setup (pyproject.toml, structure)
+- [x] State parsing and models
+- [x] `show` command
+- [x] `list` command
+- [x] `pull` command (S3 support)
+- [x] Basic test coverage
 
 ### Phase 2: Inspection Commands (v0.2.0)
 
@@ -418,6 +418,16 @@ tfstate/
 - [ ] Performance optimization for large states
 - [ ] GCS backend integration
 
+## Implemented Commands
+
+The following commands are currently available in v0.1.0:
+
+| Command | Description | Status |
+|---------|-------------|--------|
+| `show` | Display state metadata and summary | ✅ |
+| `list` | List all resources in state | ✅ |
+| `pull` | Pull state from S3 backend | ✅ |
+
 ## Open Questions
 
 ~~1. **Python version:** Target 3.10+ or 3.11+?~~ → **Python 3.12+**
@@ -426,7 +436,7 @@ tfstate/
 ~~4. **Terraform compatibility:** Which state versions to support?~~ → **v4 only**
 ~~5. **Validation:** Should we validate state structure against Terraform schema?~~ → **Lenient (best effort with warnings)**
 
-6. **S3 pull behavior:** Should `pull` command write to file or stdout by default?
+~~6. **S3 pull behavior:** Should `pull` command write to file or stdout by default?~~ → **stdout by default**
 
 ## References
 
