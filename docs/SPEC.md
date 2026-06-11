@@ -53,7 +53,7 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 ### Backend Support
 
 | Backend | Priority | Notes |
-|----------|-------|
+|---------|----------|-------|
 | **Local file** | P1 | Primary input method — any `.tfstate` or `.json` file |
 | **S3** | P2 | Optional — direct pull from S3 backend |
 | **GCS** | P3 | Future consideration |
@@ -64,7 +64,7 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 ### Output Formats
 
 | Format | Use Case |
-|----------|
+|--------|----------|
 | **Rich terminal** | Default — human-readable tables, colored output |
 | **JSON** | Piping to other tools, automation |
 | **Plain text** | Logs, simple grep-able output |
