@@ -1,4 +1,4 @@
-# Terraform State Debug Tool - Specification
+# tfstate - Specification
 
 ## Project Overview
 
@@ -29,6 +29,7 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 - Real-time state synchronization with backends
 - Terraform plan/apply execution
 - State file corruption repair (complex edge cases)
+- Using shell scripts as the primary workflow
 
 ## Architecture Decisions
 
@@ -36,7 +37,7 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 
 | Decision | Rationale |
 |----------|-----------|
-| **Python 3.10+** | Primary stack familiarity, excellent JSON handling, rich CLI ecosystem |
+| **Python 3.12+** | Primary stack familiarity, excellent JSON handling, rich CLI ecosystem |
 | **Typer** | Modern CLI framework with automatic help generation, type hints support |
 | **Rich** | Beautiful terminal output, tables, syntax highlighting, progress bars |
 | **Pydantic** | Data validation and models with strong typing |
@@ -55,11 +56,11 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 | Backend | Priority | Notes |
 |---------|----------|-------|
 | **Local file** | P1 | Primary input method — any `.tfstate` or `.json` file |
-| **S3** | P2 | Optional — direct pull from S3 backend |
+| **S3** | P1 | Direct pull from S3 backend (`tfstate pull s3://bucket/key`) |
 | **GCS** | P3 | Future consideration |
 | **HTTP** | P3 | Future consideration |
 
-**Rationale:** Local file support covers the majority of debugging use cases. Users can use `terraform state pull` or the included `scripts/tf-init.sh` to get state from any backend. Direct backend integration is a convenience, not a requirement.
+**Rationale:** S3 is the most common Terraform backend. Direct S3 pull is built into the Python tool for a seamless workflow.
 
 ### Output Formats
 
@@ -69,11 +70,27 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 | **JSON** | Piping to other tools, automation |
 | **Plain text** | Logs, simple grep-able output |
 
+### Error Handling
+
+| Decision | Implementation |
+|----------|----------------|
+| **Default mode** | User-friendly error messages, clear guidance |
+| **Debug mode** | Detailed stack traces, internal state — enabled via `--debug` flag |
+| **State validation** | Lenient — parse best effort, emit warnings for malformed data |
+| **S3 errors** | Clear messages for auth failures, missing buckets, network issues |
+
+### Backup Conventions
+
+- **Naming:** `{original_file}.backup` (e.g., `state.json.backup`)
+- **Behavior:** Overwrites on re-run (no retention of old backups)
+- **Location:** Same directory as original file
+- **Custom path:**可使用 `--backup <path>` 指定自定义位置
+
 ## Core Commands
 
 ### Phase 1: State Inspection (Debug)
 
-#### `tfstate-debug show <file>`
+#### `tfstate show <file>`
 
 Display state metadata and summary.
 
@@ -94,7 +111,7 @@ Modules:
   - module.eks (58 resources)
 ```
 
-#### `tfstate-debug list <file>`
+#### `tfstate list <file>`
 
 List all resources in state.
 
@@ -111,7 +128,7 @@ Options:
 - `--module <module_path>` — Filter by module
 - `--format <table|json|plain>` — Output format
 
-#### `tfstate-debug get <file> <address>`
+#### `tfstate get <file> <address>`
 
 Show detailed resource information.
 
@@ -134,12 +151,12 @@ Dependents:
   - module.vpc.aws_internet_gateway.main
 ```
 
-#### `tfstate-debug query <file>`
+#### `tfstate query <file>`
 
 Query resources using filters.
 
 ```
-tfstate-debug query state.json --type aws_instance --attr 'tags.Environment=prod'
+tfstate query state.json --type aws_instance --attr 'tags.Environment=prod'
 ```
 
 Options:
@@ -149,7 +166,7 @@ Options:
 - `--has-attr <key>` — Resources that have this attribute
 - `--missing-attr <key>` — Resources missing this attribute
 
-#### `tfstate-debug graph <file>`
+#### `tfstate graph <file>`
 
 Show resource dependency graph.
 
@@ -167,7 +184,7 @@ Options:
 - `--depth <n>` — Limit graph depth
 - `--format <tree|dot|json>` — Output format (tree, Graphviz DOT, JSON)
 
-#### `tfstate-debug diff <file1> <file2>`
+#### `tfstate diff <file1> <file2>`
 
 Compare two state files.
 
@@ -188,14 +205,33 @@ Resources added: 3
 Resources removed: 1
 ```
 
+#### `tfstate pull <s3Uri>`
+
+Pull state directly from an S3 backend.
+
+```
+tfstate pull s3://my-bucket/prod/terraform.tfstate
+tfstate pull s3://my-bucket/prod/terraform.tfstate --profile my-profile --region eu-west-1
+```
+
+Options:
+- `--profile <name>` — AWS CLI profile to use
+- `--region <region>` — AWS region (default: from profile or environment)
+- `--output <path>` — Output file (default: stdout)
+
+Behavior:
+1. Authenticates using AWS SDK (supports profile, env vars, IAM role)
+2. Downloads state from S3
+3. Outputs to file or stdout
+
 ### Phase 2: State Manipulation
 
-#### `tfstate-debug rm <file> <address>`
+#### `tfstate rm <file> <address>`
 
 Remove resource(s) from state.
 
 ```
-tfstate-debug rm state.json module.vpc.aws_instance.bastion
+tfstate rm state.json module.vpc.aws_instance.bastion
 ```
 
 Options:
@@ -208,12 +244,12 @@ Behavior:
 3. Updates serial number
 4. Writes modified state
 
-#### `tfstate-debug filter <file> --output <path>`
+#### `tfstate filter <file> --output <path>`
 
 Create a new state file with filtered resources.
 
 ```
-tfstate-debug filter state.json --type aws_instance --output instances.json
+tfstate filter state.json --type aws_instance --output instances.json
 ```
 
 Options:
@@ -222,15 +258,15 @@ Options:
 - `--exclude-type <type>` — Exclude this type
 - `--exclude-module <path>` — Exclude this module
 
-#### `tfstate-debug mv <file> <src> <dst>`
+#### `tfstate mv <file> <src> <dst>`
 
 Rename/move a resource within state.
 
 ```
-tfstate-debug mv state.json aws_instance.web module.web.aws_instance.main
+tfstate mv state.json aws_instance.web module.web.aws_instance.main
 ```
 
-#### `tfstate-debug import <file> <address> <id>`
+#### `tfstate import <file> <address> <id>`
 
 Import an existing resource into state (wraps `terraform import`).
 
@@ -307,18 +343,19 @@ class State(BaseModel):
 ## Project Structure
 
 ```
-tfstate-debug/
+tfstate/
 ├── pyproject.toml           # Project config, dependencies, entry points
 ├── README.md                # Quick start, installation, examples
 ├── docs/
 │   └── SPEC.md              # This document
-├── src/tfstate_debug/
+├── src/tfstate/
 │   ├── __init__.py
 │   ├── cli.py               # CLI entry point (typer app)
 │   ├── parser.py            # State file parsing logic
 │   ├── models.py            # Pydantic models for state structure
 │   ├── commands/
 │   │   ├── __init__.py
+│   │   ├── pull.py          # pull command (S3 backend)
 │   │   ├── show.py          # show command
 │   │   ├── list.py          # list command
 │   │   ├── get.py           # get command
@@ -355,6 +392,7 @@ tfstate-debug/
 - [ ] State parsing and models
 - [ ] `show` command
 - [ ] `list` command
+- [ ] `pull` command (S3 support)
 - [ ] Basic test coverage
 
 ### Phase 2: Inspection Commands (v0.2.0)
@@ -378,15 +416,17 @@ tfstate-debug/
 - [ ] Documentation
 - [ ] Graphviz DOT output for graph
 - [ ] Performance optimization for large states
-- [ ] S3 backend integration (optional)
+- [ ] GCS backend integration
 
 ## Open Questions
 
-1. **Python version:** Target 3.10+ or 3.11+?
-2. **Package distribution:** PyPI only, or also support Homebrew/other?
-3. **Graph visualization:** Include Graphviz integration or keep external?
-4. **Terraform compatibility:** Which state versions to support? (Currently v4)
-5. **Validation:** Should we validate state structure against Terraform schema?
+~~1. **Python version:** Target 3.10+ or 3.11+?~~ → **Python 3.12+**
+~~2. **Package distribution:** PyPI only, or also support Homebrew/other?~~ → **PyPI only**
+~~3. **Graph visualization:** Include Graphviz integration or keep external?~~ → **External only (DOT output)**
+~~4. **Terraform compatibility:** Which state versions to support?~~ → **v4 only**
+~~5. **Validation:** Should we validate state structure against Terraform schema?~~ → **Lenient (best effort with warnings)**
+
+6. **S3 pull behavior:** Should `pull` command write to file or stdout by default?
 
 ## References
 

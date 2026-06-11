@@ -1,10 +1,10 @@
-# tf-state-debug
+# tfstate
 
 A Python CLI tool for debugging, analyzing, and manipulating Terraform state files.
 
 ## Overview
 
-`tf-state-debug` provides tools to inspect, query, and modify Terraform state files without requiring access to the original Terraform project or the Terraform binary for most operations.
+`tfstate` provides tools to inspect, query, and modify Terraform state files without requiring access to the original Terraform project or the Terraform binary for most operations.
 
 ## Features
 
@@ -18,26 +18,26 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 
 ```bash
 # Using uv
-uv tool install tf-state-debug
+uv tool install tfstate
 
 # Using pip
-pip install tf-state-debug
+pip install tfstate
 ```
 
 ## Quick Start
 
 ```bash
 # View state summary
-tf-state-debug show state.json
+tfstate show state.json
 
 # List all resources
-tf-state-debug list state.json
+tfstate list state.json
 
 # Query specific resource types
-tf-state-debug query state.json --type aws_instance
+tfstate query state.json --type aws_instance
 
 # Get detailed resource info
-tf-state-debug get state.json aws_vpc.main
+tfstate get state.json aws_vpc.main
 ```
 
 ## Getting State Files

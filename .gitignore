@@ -1,0 +1,25 @@
+# Terraform state directories (created by tf-init.sh)
+scripts/*/terraform.tfstate/
+scripts/*/.terraform/
+scripts/*/backend.tf
+
+# Local state files
+*.tfstate
+*.tfstate.*
+state*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Build artifacts
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp

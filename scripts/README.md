@@ -1,7 +1,7 @@
 # Terraform S3 Backend Initializer
 
-> **Note:** This script represents the initial prototype for what will become a more comprehensive 
-> Terraform state debugging tool. See the main project for the structured Python implementation.
+> **Note:** This script represents the initial prototype for what will become the more comprehensive
+> tfstate tool. See the main project for the structured Python implementation.
 
 ## Overview
 
@@ -155,7 +155,7 @@ This is normal for new Terraform backends with no prior state.
 
 ## Related Project
 
-This script is the prototype for a larger **Terraform State Debug Tool** being built in this repository. 
+This script is the prototype for the **tfstate** tool being built in this repository.
 The goal is to provide:
 
 - State analysis and inspection
