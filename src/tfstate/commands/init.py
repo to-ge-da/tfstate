@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
-from rich.progress import Spinner
+from rich.status import Status
 
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode
@@ -106,7 +106,7 @@ def init_terraform_backend(
     if profile:
         env = {"AWS_PROFILE": profile}
 
-    with Spinner(console, "Initializing Terraform backend..."):
+    with Status("Initializing Terraform backend...", console=console):
         result = subprocess.run(
             ["terraform", "init"],
             cwd=workspace,
