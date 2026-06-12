@@ -19,6 +19,14 @@ def parse_state_file(path: Path) -> State:
     return parse_state_data(data)
 
 
+def parse_state_json(content: str) -> State:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:
+        raise StateParseError(f"Invalid JSON: {e}")
+    return parse_state_data(data)
+
+
 def parse_state_data(data: dict) -> State:
     if not isinstance(data, dict):
         raise StateParseError("State file must be a JSON object")

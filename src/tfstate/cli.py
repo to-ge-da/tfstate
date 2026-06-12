@@ -1,15 +1,26 @@
 import typer
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Annotated
 
 from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
 from tfstate.commands.pull import pull
+from tfstate.commands.init import init as init_cmd
 
 app = typer.Typer(
     name="tfstate",
     help="A CLI tool for debugging, analyzing, and manipulating Terraform state files",
 )
+
+
+@app.command("init")
+def init(
+    state_path: str = typer.Argument(..., help="S3 URI or local file path to state file"),
+    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
+    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
+) -> None:
+    init_cmd(state_path, profile=profile, region=region, debug=debug)
 
 
 @app.command("show")

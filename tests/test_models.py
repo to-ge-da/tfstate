@@ -1,7 +1,5 @@
 import pytest
-from tfstate.parser import parse_state_file, parse_state_data, StateParseError
-from tfstate.models import State, Resource, Instance
-from pathlib import Path
+from tfstate.parser import parse_state_data, StateParseError
 
 
 class TestParseStateFile:
