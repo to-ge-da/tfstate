@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from typer.testing import CliRunner
 
-from tfstate.commands.init import is_s3_uri, parse_s3_uri
+from tfstate.commands.init import is_s3_uri, parse_s3_uri, generate_backend_tf, check_terraform_installed
 from tfstate.cli import app
 
 
@@ -80,3 +80,23 @@ class TestInitCommandHelp:
         assert "--profile" in result.stdout
         assert "--region" in result.stdout
         assert "--debug" in result.stdout
+        assert "--terraform" in result.stdout
+
+
+class TestTerraformBackend:
+    def test_generate_backend_tf(self):
+        content = generate_backend_tf("my-bucket", "path/to/state.tfstate", "us-east-1", "my-profile")
+        assert 'bucket = "my-bucket"' in content
+        assert 'key    = "path/to/state.tfstate"' in content
+        assert 'region = "us-east-1"' in content
+        assert 'profile = "my-profile"' in content
+        assert 'backend "s3"' in content
+
+    def test_generate_backend_tf_without_profile(self):
+        content = generate_backend_tf("my-bucket", "path/to/state.tfstate", "us-east-1", None)
+        assert 'bucket = "my-bucket"' in content
+        assert 'profile = "my-profile"' not in content
+
+    def test_check_terraform_installed(self):
+        result = check_terraform_installed()
+        assert isinstance(result, bool)

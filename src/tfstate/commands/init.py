@@ -1,12 +1,15 @@
 import typer
 import boto3
 import traceback
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
-from tfstate.state_store import set_state
+from tfstate.state_store import set_state, set_terraform_mode
 from tfstate.output import print_init
 
 
@@ -68,24 +71,89 @@ def load_local_file(path: str) -> tuple[str, str]:
     return content, str(file_path)
 
 
+def check_terraform_installed() -> bool:
+    return shutil.which("terraform") is not None
+
+
+def generate_backend_tf(bucket: str, key: str, region: Optional[str], profile: Optional[str]) -> str:
+    lines = [
+        'terraform {',
+        '  backend "s3" {',
+        f'    bucket = "{bucket}"',
+        f'    key    = "{key}"',
+    ]
+    if region:
+        lines.append(f'    region = "{region}"')
+    if profile:
+        lines.append(f'    profile = "{profile}"')
+    lines.append("  }")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def init_terraform_backend(
+    s3_uri: str, profile: Optional[str], region: Optional[str]
+) -> tuple[str, dict]:
+    bucket, key = parse_s3_uri(s3_uri)
+
+    workspace = tempfile.mkdtemp(prefix="tfstate-")
+
+    backend_tf_path = Path(workspace) / "backend.tf"
+    backend_tf_path.write_text(generate_backend_tf(bucket, key, region, profile))
+
+    env = None
+    if profile:
+        env = {"AWS_PROFILE": profile}
+
+    result = subprocess.run(
+        ["terraform", "init"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"terraform init failed:\n{result.stderr}")
+
+    backend_config = {
+        "bucket": bucket,
+        "key": key,
+        "region": region,
+        "profile": profile,
+    }
+
+    return workspace, backend_config
+
+
 def init(
     state_path: str,
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+    terraform: bool = typer.Option(False, "--terraform", help="Initialize real Terraform backend"),
 ) -> None:
     try:
         if is_s3_uri(state_path):
             content, source = download_from_s3(state_path, profile, region)
             backend = "S3"
             state = parse_state_json(content)
+
+            if terraform:
+                if not check_terraform_installed():
+                    raise RuntimeError("terraform binary not found. Is Terraform installed and in PATH?")
+                workspace, backend_config = init_terraform_backend(state_path, profile, region)
+                set_terraform_mode(workspace, backend_config)
+                print_init(state, source, backend, terraform_mode=True)
+            else:
+                set_state(state, source)
+                print_init(state, source, backend)
         else:
             content, source = load_local_file(state_path)
             backend = "local"
             state = parse_state_file(Path(state_path))
-
-        set_state(state, source)
-        print_init(state, source, backend)
+            set_state(state, source)
+            print_init(state, source, backend)
 
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)

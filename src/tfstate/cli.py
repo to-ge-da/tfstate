@@ -19,8 +19,9 @@ def init(
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
     debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
+    terraform: Annotated[bool, typer.Option("--terraform", help="Initialize real Terraform backend")] = False,
 ) -> None:
-    init_cmd(state_path, profile=profile, region=region, debug=debug)
+    init_cmd(state_path, profile=profile, region=region, debug=debug, terraform=terraform)
 
 
 @app.command("show")

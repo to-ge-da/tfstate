@@ -6,12 +6,16 @@ from tfstate.models import State
 console = Console()
 
 
-def print_init(state: State, source: str, backend: str) -> None:
-    console.print(f"\n[bold green]Initialized state from {backend} backend[/bold green]")
+def print_init(state: State, source: str, backend: str, terraform_mode: bool = False) -> None:
+    mode_label = "Terraform backend" if terraform_mode else f"{backend} backend"
+    console.print(f"\n[bold green]Initialized state from {mode_label}[/bold green]")
     console.print(f"[bold]Source:[/bold] {source}")
     console.print(f"[bold]Terraform Version:[/bold] {state.terraform_version}")
     console.print(f"[bold]Serial:[/bold] {state.serial}")
     console.print(f"[bold]Lineage:[/bold] {state.lineage}")
+
+    if terraform_mode:
+        console.print("[dim]Real Terraform backend initialized - state manipulation enabled[/dim]")
 
     by_type = state.resources_by_type()
     total_resources = sum(len(resources) for resources in by_type.values())
