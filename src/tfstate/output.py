@@ -6,6 +6,34 @@ from tfstate.models import State
 console = Console()
 
 
+def print_init(state: State, source: str, backend: str, terraform_mode: bool = False) -> None:
+    mode_label = "Terraform backend" if terraform_mode else f"{backend} backend"
+    console.print(f"\n[bold green]Initialized state from {mode_label}[/bold green]")
+    console.print(f"[bold]Source:[/bold] {source}")
+    console.print(f"[bold]Terraform Version:[/bold] {state.terraform_version}")
+    console.print(f"[bold]Serial:[/bold] {state.serial}")
+    console.print(f"[bold]Lineage:[/bold] {state.lineage}")
+
+    if terraform_mode:
+        console.print("[dim]Real Terraform backend initialized - state manipulation enabled[/dim]")
+
+    by_type = state.resources_by_type()
+    total_resources = sum(len(resources) for resources in by_type.values())
+    total_instances = sum(
+        len(r.instances) for resources in by_type.values() for r in resources
+    )
+
+    console.print(f"\n[bold]Resources:[/bold] {total_resources} ({total_instances} instances)")
+    for res_type, resources in sorted(by_type.items()):
+        instances = sum(len(r.instances) for r in resources)
+        console.print(f"  - {res_type}: {instances}")
+
+    if state.outputs:
+        console.print(f"\n[bold]Outputs:[/bold] {len(state.outputs)}")
+        for name in sorted(state.outputs.keys()):
+            console.print(f"  - {name}")
+
+
 def print_show(state: State, file_path: str = "unknown") -> None:
     console.print(f"\n[bold]State File:[/bold] {file_path}")
     console.print(f"[bold]Terraform Version:[/bold] {state.terraform_version}")

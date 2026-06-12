@@ -27,6 +27,12 @@ pip install tfstate
 ## Quick Start
 
 ```bash
+# Initialize state from S3 (read-only)
+tfstate init s3://my-bucket/prod/terraform.tfstate
+
+# Initialize with real Terraform backend
+tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
+
 # View state summary
 tfstate show state.json
 
@@ -40,19 +46,10 @@ tfstate query state.json --type aws_instance
 tfstate get state.json aws_vpc.main
 ```
 
-## Getting State Files
+## Documentation
 
-Use the included script to pull state from an S3 backend:
-
-```bash
-./scripts/tf-init.sh --bucket my-terraform-state --key prod/terraform.tfstate
-```
-
-Or use Terraform directly:
-
-```bash
-terraform state pull > state.json
-```
+- [init command](docs/init.md) — Initialize state from S3 or local files
+- [Project Specification](docs/SPEC.md) — Architecture, commands, and implementation plan
 
 ## Documentation
 

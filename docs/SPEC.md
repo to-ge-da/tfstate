@@ -458,6 +458,8 @@ tfstate/
 - [x] `show` command (offline JSON)
 - [x] `list` command (offline JSON)
 - [x] `pull` command (S3 support)
+- [x] `init` command (S3 and local file support)
+- [x] `init --terraform` (real Terraform backend)
 - [x] Basic test coverage
 
 ### Phase 2: Connected Mode + Advanced Inspection (v0.2.0)
@@ -490,11 +492,13 @@ tfstate/
 
 The following commands are currently available in v0.1.0:
 
-| Command | Description | Mode |
-|---------|-------------|------|
-| `show` | Display state metadata and summary | Offline |
-| `list` | List all resources in state | Offline |
-| `pull` | Pull state from S3 backend | Offline |
+| Command | Description | Status |
+|---------|-------------|--------|
+| `show` | Display state metadata and summary | ✅ |
+| `list` | List all resources in state | ✅ |
+| `pull` | Pull state from S3 backend | ✅ |
+| `init` | Initialize state from S3 or local file | ✅ |
+| `init --terraform` | Initialize real Terraform backend | ✅ |
 
 ## Open Questions
 
