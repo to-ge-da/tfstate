@@ -37,8 +37,8 @@ line-length = 100
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=9.0",
     "pytest-cov>=7.0",
     "ruff>=0.9",
