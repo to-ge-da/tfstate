@@ -1,0 +1,86 @@
+{
+  "version": 4,
+  "terraform_version": "1.5.7",
+  "serial": 42,
+  "lineage": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "outputs": {
+    "vpc_id": {
+      "value": {
+        "id": "vpc-0abc123def456"
+      },
+      "sensitive": false,
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "module": "module.vpc",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "vpc-0abc123def456",
+            "cidr_block": "10.0.0.0/16",
+            "tags": {
+              "Name": "production-vpc"
+            },
+            "instance_tenancy": "default"
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "module": "module.vpc",
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "public",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "subnet-0abc123def456",
+            "vpc_id": "vpc-0abc123def456",
+            "cidr_block": "10.0.1.0/24",
+            "availability_zone": "eu-west-1a"
+          },
+          "dependencies": ["module.vpc.aws_vpc.main"]
+        },
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "subnet-1abc123def456",
+            "vpc_id": "vpc-0abc123def456",
+            "cidr_block": "10.0.2.0/24",
+            "availability_zone": "eu-west-1b"
+          },
+          "dependencies": ["module.vpc.aws_vpc.main"]
+        }
+      ]
+    },
+    {
+      "module": null,
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "bastion",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-0abc123def456",
+            "instance_type": "t3.micro",
+            "ami": "ami-0abc123def456",
+            "subnet_id": "subnet-0abc123def456"
+          },
+          "dependencies": ["module.vpc.aws_vpc.main", "module.vpc.aws_subnet.public[0]"]
+        }
+      ]
+    }
+  ]
+}

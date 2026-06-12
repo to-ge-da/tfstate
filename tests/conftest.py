@@ -1,0 +1,16 @@
+import pytest
+from pathlib import Path
+from tfstate.parser import parse_state_file, parse_state_data, StateParseError
+from tfstate.models import State
+
+
+@pytest.fixture
+def basic_state() -> State:
+    return parse_state_file(Path(__file__).parent / "fixtures" / "basic.json")
+
+
+@pytest.fixture
+def basic_data() -> dict:
+    import json
+    with open(Path(__file__).parent / "fixtures" / "basic.json") as f:
+        return json.load(f)
