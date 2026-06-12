@@ -7,10 +7,11 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
+from rich.progress import Spinner
 
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode
-from tfstate.output import print_init
+from tfstate.output import print_init, console
 
 
 def is_s3_uri(path: str) -> bool:
@@ -105,13 +106,14 @@ def init_terraform_backend(
     if profile:
         env = {"AWS_PROFILE": profile}
 
-    result = subprocess.run(
-        ["terraform", "init"],
-        cwd=workspace,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    with Spinner(console, "Initializing Terraform backend..."):
+        result = subprocess.run(
+            ["terraform", "init"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
 
     if result.returncode != 0:
         raise RuntimeError(f"terraform init failed:\n{result.stderr}")
