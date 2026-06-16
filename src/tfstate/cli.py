@@ -7,6 +7,7 @@ from tfstate.commands.list import list_resources
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
+from tfstate.commands.mv import mv as mv_cmd
 from tfstate.session import clear_session
 from tfstate.output import console
 
@@ -64,6 +65,17 @@ def pull_cmd(
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
 ) -> None:
     pull(s3_uri, output=output, profile=profile, region=region)
+
+
+@app.command("mv")
+def mv(
+    src: str = typer.Argument(..., help="Source resource address"),
+    dst: str = typer.Argument(..., help="Destination resource address"),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
+    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+) -> None:
+    mv_cmd(src, dst, force=force, backup=backup, debug=debug)
 
 
 @app.command("rm")
