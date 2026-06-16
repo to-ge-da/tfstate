@@ -8,6 +8,9 @@ scripts/*/backend.tf
 *.tfstate.*
 state*.json
 
+# Test workspace directories
+*-test/
+
 # Python
 __pycache__/
 *.py[cod]
