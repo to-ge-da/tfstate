@@ -1,14 +1,25 @@
 import typer
 from pathlib import Path
+from typing import Optional
 from tfstate.parser import parse_state_file, StateParseError
 from tfstate.output import print_show
+from tfstate.state_store import get_state_source, get_backend_type, require_state
 
 
-def show(state_file: Path) -> None:
+def show(state_file: Optional[Path] = None) -> None:
     try:
-        state = parse_state_file(state_file)
-        print_show(state, str(state_file))
+        if state_file:
+            state = parse_state_file(state_file)
+            print_show(state, str(state_file))
+        else:
+            state = require_state()
+            source = get_state_source() or "unknown"
+            backend_type = get_backend_type()
+            print_show(state, source, backend_type=backend_type)
     except StateParseError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    except RuntimeError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 

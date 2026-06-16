@@ -196,10 +196,11 @@ def init(
                     state_path, profile, region, workspace=workspace
                 )
                 set_terraform_mode(workspace, backend_config)
+                set_state(state, source, backend)
                 set_workspace(workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
-                set_state(state, source)
+                set_state(state, source, backend)
                 ws = None
                 if output:
                     ws, _ = resolve_workspace(output)
@@ -221,10 +222,11 @@ def init(
                     Path(state_path), workspace
                 )
                 set_terraform_mode(workspace, backend_config)
+                set_state(state, source, backend)
                 set_workspace(workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
-                set_state(state, source)
+                set_state(state, source, backend)
                 ws = None
                 if output:
                     ws, _ = resolve_workspace(output)

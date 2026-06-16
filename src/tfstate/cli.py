@@ -32,13 +32,19 @@ def init(
 
 
 @app.command("show")
-def show_cmd(state_file: Path) -> None:
+def show_cmd(
+    state_file: Optional[Path] = typer.Argument(
+        None, help="State file (omit to use initialized state)"
+    ),
+) -> None:
     show(state_file)
 
 
 @app.command("list")
 def list_cmd(
-    state_file: Path,
+    state_file: Optional[Path] = typer.Argument(
+        None, help="State file (omit to use initialized state)"
+    ),
     type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
     module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
 ) -> None:
