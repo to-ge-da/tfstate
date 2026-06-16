@@ -172,9 +172,11 @@ tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
 # (Currently printed only in debug mode — planned improvement)
 
 # Use terraform directly in the workspace
+# ⚠️ Single-quote addresses containing brackets, e.g. module.rds_settings["v15"]
 terraform -chdir=/tmp/tfstate-xxxxx state list
-terraform -chdir=/tmp/tfstate-xxxxx state show aws_instance.bastion
-terraform -chdir=/tmp/tfstate-xxxxx state rm aws_instance.bastion
+terraform -chdir=/tmp/tfstate-xxxxx state show 'aws_instance.bastion'
+terraform -chdir=/tmp/tfstate-xxxxx state rm 'module.rds_settings["v15"].aws_db_option_group.option_group'
+terraform -chdir=/tmp/tfstate-xxxxx state mv 'module.rds_settings["v15"].aws_db_option_group.option_group' 'module.rds_settings["v16"].aws_db_option_group.option_group'
 ```
 
 ---
@@ -250,8 +252,11 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 |---------------|----------------|-------------------|
 | See state summary | `tfstate show <file>` | `tfstate show` (after init) |
 | List resources | `tfstate list <file>` | `tfstate list` (after init) |
-| Remove a resource | `terraform -chdir=<ws> state rm <addr>` | `tfstate rm <addr>` |
-| Move a resource | `terraform -chdir=<ws> state mv <src> <dst>` | `tfstate mv <src> <dst>` |
+| Remove a resource | `terraform -chdir=<ws> state rm '<addr>'` ¹ | `tfstate rm <addr>` |
+| Move a resource | `terraform -chdir=<ws> state mv '<src>' '<dst>'` ¹ | `tfstate mv <src> <dst>` |
 | Find specific resources | N/A | `tfstate query [file] --type` |
 | Compare two states | N/A | `tfstate diff <file1> <file2>` |
 | View dependency tree | N/A | `tfstate graph <file>` |
+
+¹ Wrap addresses in single quotes when they contain square brackets with quoted keys. This prevents the shell from stripping the inner double quotes. Applies to all `state` subcommands (`show`, `rm`, `mv`, etc.).  
+Example: `terraform -chdir=<ws> state rm 'module.rds_settings["v15"].aws_db_option_group.option_group'`
