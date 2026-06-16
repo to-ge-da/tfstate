@@ -173,6 +173,104 @@ class TestShowListFromCache:
         s.SESSION_FILE = original_dir / "session.json"
         s.STATE_FILE = original_dir / "state.json"
 
+    def test_init_then_fresh_process_then_show(self, tmp_path: Path):
+        import tfstate.session as s
+
+        fake_home = tmp_path / "fresh"
+        fake_home.mkdir()
+
+        s.SESSION_DIR = fake_home / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
+        state_data = BASIC_FIXTURE.read_text()
+        s.SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        s.STATE_FILE.write_text(state_data)
+        s.SESSION_FILE.write_text(json.dumps({
+            "source": str(BASIC_FIXTURE),
+            "backend": "local",
+            "terraform_mode": False,
+            "workspace": None,
+            "cached_at": "2026-06-16T12:00:00",
+        }))
+
+        clear_state()
+
+        result = runner.invoke(app, ["show"])
+        assert result.exit_code == 0
+        assert "State File:" in result.stdout
+        assert "Resources:" in result.stdout
+        assert "aws_vpc" in result.stdout
+
+        s.SESSION_DIR = Path.home() / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
+    def test_list_type_filter_from_cache(self, tmp_path: Path):
+        import tfstate.session as s
+
+        fake_home = tmp_path / "type-filter"
+        fake_home.mkdir()
+
+        s.SESSION_DIR = fake_home / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
+        state_data = BASIC_FIXTURE.read_text()
+        s.SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        s.STATE_FILE.write_text(state_data)
+        s.SESSION_FILE.write_text(json.dumps({
+            "source": str(BASIC_FIXTURE),
+            "backend": "local",
+            "terraform_mode": False,
+            "workspace": None,
+            "cached_at": "2026-06-16T12:00:00",
+        }))
+
+        clear_state()
+
+        result = runner.invoke(app, ["list", "--type", "aws_vpc"])
+        assert result.exit_code == 0
+        assert "aws_vpc" in result.stdout
+        assert "aws_subnet" not in result.stdout
+        assert "aws_instance" not in result.stdout
+
+        s.SESSION_DIR = Path.home() / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
+    def test_list_module_filter_from_cache(self, tmp_path: Path):
+        import tfstate.session as s
+
+        fake_home = tmp_path / "module-filter"
+        fake_home.mkdir()
+
+        s.SESSION_DIR = fake_home / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
+        state_data = BASIC_FIXTURE.read_text()
+        s.SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        s.STATE_FILE.write_text(state_data)
+        s.SESSION_FILE.write_text(json.dumps({
+            "source": str(BASIC_FIXTURE),
+            "backend": "local",
+            "terraform_mode": False,
+            "workspace": None,
+            "cached_at": "2026-06-16T12:00:00",
+        }))
+
+        clear_state()
+
+        result = runner.invoke(app, ["list", "--module", "module.vpc"])
+        assert result.exit_code == 0
+        assert "module.vpc" in result.stdout
+        assert "aws_instance" not in result.stdout  # root module resource
+
+        s.SESSION_DIR = Path.home() / ".tfstate"
+        s.SESSION_FILE = s.SESSION_DIR / "session.json"
+        s.STATE_FILE = s.SESSION_DIR / "state.json"
+
 
 class TestClearCommand:
     def test_clear_command_removes_cache(self, tmp_path: Path):
