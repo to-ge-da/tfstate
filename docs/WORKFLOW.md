@@ -127,6 +127,39 @@ Requires the `terraform` binary and an `init` step that connects to a real backe
 | `mv` | 📋 Planned (Phase 3) | `tfstate mv <src> <dst>` |
 | `terraform state *` | ⚠️ Manual workaround | `terraform -chdir=<workspace> state <cmd>` |
 
+### Example session (connected)
+
+Once Phase 2 and 3 land, the typical connected mode workflow will be:
+
+```bash
+# Connect to the real backend
+tfstate init s3://my-bucket/prod/terraform.tfstate --terraform -o ./workspace  # 📋 -o (#13)
+
+# Inspect the live state (no file argument needed)
+tfstate show                                        # 📋 connected mode (#5)
+tfstate list --type aws_instance                    # 📋 connected mode (#5)
+tfstate list --module module.vpc                    # 📋 connected mode (#5)
+
+# Get detailed resource info
+tfstate get module.vpc.aws_vpc.main                 # 📋 (#9)
+tfstate get aws_instance.bastion                    # 📋 (#9)
+
+# Query with filters
+tfstate query --type aws_instance --attr tags.Environment=prod   # 📋 (#6)
+tfstate query --has-attr tags.Name                               # 📋 (#6)
+tfstate query --missing-attr tags.Owner                          # 📋 (#6)
+
+# Resource dependency graph
+tfstate graph state.json --address aws_vpc.main --depth 2       # 📋 (#10)
+
+# Diff snapshots (offline)
+tfstate diff prod_jan.json prod_feb.json                        # 📋 (#7)
+
+# Safe state manipulation (auto-backup, confirmation prompt)
+tfstate rm module.vpc.aws_instance.bastion                      # 📋 Phase 3
+tfstate mv aws_instance.web module.web.aws_instance.main        # 📋 Phase 3
+```
+
 ### Workaround: using terraform directly in the workspace
 
 `init --terraform` creates a real Terraform workspace. You can use `terraform` directly there:
