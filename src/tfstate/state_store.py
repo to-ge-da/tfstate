@@ -60,6 +60,19 @@ def require_state() -> State:
     return _current_state
 
 
+def require_terraform_mode() -> str:
+    if _current_state is None:
+        raise RuntimeError("No state loaded. Run 'tfstate init' first.")
+    if not _is_terraform_mode:
+        raise RuntimeError(
+            "State is loaded but terraform mode is not active. "
+            "Run 'tfstate init --terraform' first to enable state manipulation."
+        )
+    if not _terraform_workspace:
+        raise RuntimeError("No terraform workspace found. Run 'tfstate init --terraform' first.")
+    return _terraform_workspace
+
+
 def set_terraform_mode(workspace: str, backend_config: dict) -> None:
     global _is_terraform_mode, _terraform_workspace, _backend_config
     _is_terraform_mode = True

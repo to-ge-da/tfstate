@@ -119,3 +119,12 @@ def find_dependents(state: State, address: str) -> list[str]:
             if address in instance.dependencies:
                 dependents.append(resource.address)
     return dependents
+
+
+def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -> None:
+    remaining = len(new_state.resources)
+    console.print(f"[bold green]Resource removed: {address}[/bold green]")
+    console.print(f"[bold]Backup:[/bold] {backup_path}")
+    console.print(f"[bold]Resources remaining:[/bold] {remaining}")
+    if rm_output.strip():
+        console.print(rm_output.strip())
