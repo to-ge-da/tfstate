@@ -98,6 +98,43 @@ class TestListCommand:
         assert "aws_subnet" in result.stdout
         assert "aws_instance" not in result.stdout
 
+    def test_list_filter_by_type_no_match(self):
+        result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No resources found" in result.stdout
+        assert "aws_vpc" in result.stdout
+
+    def test_list_filter_by_module_no_match(self):
+        result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--module", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No resources found" in result.stdout
+        assert "module.vpc" in result.stdout
+
+    def test_list_filter_by_type_no_match_connected(self):
+        result = runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        assert result.exit_code == 0
+
+        result = runner.invoke(app, ["list", "--type", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No resources found" in result.stdout
+        assert "aws_vpc" in result.stdout
+
+    def test_list_filter_by_module_no_match_connected(self):
+        result = runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        assert result.exit_code == 0
+
+        result = runner.invoke(app, ["list", "--module", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No resources found" in result.stdout
+        assert "module.vpc" in result.stdout
+
+    def test_list_filter_combined_no_match(self):
+        result = runner.invoke(
+            app, ["list", str(BASIC_FIXTURE), "--type", "aws_vpc", "--module", "nonexistent"]
+        )
+        assert result.exit_code == 0
+        assert "No resources found" in result.stdout
+
     def test_list_offline_file_not_found(self):
         result = runner.invoke(app, ["list", "/nonexistent/path.json"])
         assert result.exit_code == 1

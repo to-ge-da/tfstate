@@ -73,6 +73,7 @@ def print_show(state: State, file_path: str = "unknown", backend_type: Optional[
 def print_list(
     state: State, resource_type: Optional[str] = None, module: Optional[str] = None
 ) -> None:
+    matched = 0
     for resource in state.resources:
         if resource_type and resource.type != resource_type:
             continue
@@ -81,6 +82,22 @@ def print_list(
 
         for i in range(len(resource.instances)):
             console.print(resource.full_address(i))
+            matched += 1
+
+    if matched == 0 and (resource_type or module):
+        parts = []
+        if resource_type:
+            parts.append(f"type: {resource_type}")
+        if module:
+            parts.append(f"module: {module}")
+        console.print(f"[yellow]No resources found matching filter ({', '.join(parts)})[/yellow]")
+
+        if module:
+            available = sorted(set(r.module for r in state.resources if r.module))
+            console.print(f"Available modules: {', '.join(available) or '(none)'}")
+        if resource_type:
+            available = sorted(set(r.type for r in state.resources))
+            console.print(f"Available types: {', '.join(available)}")
 
 
 def print_get(state: State, address: str) -> None:
