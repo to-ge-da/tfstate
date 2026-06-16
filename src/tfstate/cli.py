@@ -71,9 +71,10 @@ def rm(
     address: str = typer.Argument(..., help="Resource address to remove"),
     force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
+    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
 ) -> None:
-    rm_cmd(address, force=force, backup=backup, debug=debug)
+    rm_cmd(address, force=force, backup=backup, no_backup=no_backup, debug=debug)
 
 
 @app.command("clear")

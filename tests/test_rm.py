@@ -238,6 +238,55 @@ class TestRmSuccess:
         assert json.loads(custom_backup.read_text())["version"] == 4
 
 
+class TestRmNoBackup:
+    def test_rm_no_backup_skips_backup_file(self, terraform_state):
+        state, workspace = terraform_state
+        updated_json = state_without("module.vpc.aws_vpc.main")
+        backup_file = Path(workspace) / "terraform.tfstate.backup"
+
+        mock_rm = MagicMock(
+            returncode=0,
+            stdout="Removed module.vpc.aws_vpc.main from state.\n",
+            stderr="",
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_rm, mock_pull_after]
+            result = runner.invoke(
+                app, ["rm", "module.vpc.aws_vpc.main", "--force", "--no-backup"]
+            )
+
+        assert result.exit_code == 0
+        assert not backup_file.exists()
+        assert "Resource removed:" in result.stdout
+
+    def test_rm_no_backup_still_removes_resource(self, terraform_state):
+        state, workspace = terraform_state
+        updated_json = state_without("module.vpc.aws_vpc.main")
+
+        mock_rm = MagicMock(
+            returncode=0,
+            stdout="Removed module.vpc.aws_vpc.main from state.\n",
+            stderr="",
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_rm, mock_pull_after]
+            result = runner.invoke(
+                app, ["rm", "module.vpc.aws_vpc.main", "--force", "--no-backup"]
+            )
+
+        assert result.exit_code == 0
+        assert "Resource removed: module.vpc.aws_vpc.main" in result.stdout
+
+    def test_rm_no_backup_help_shows_flag(self):
+        result = runner.invoke(app, ["rm", "--help"])
+        assert result.exit_code == 0
+        assert "--no-backup" in result.stdout
+
+
 class TestRmDebug:
     def test_rm_debug_flag_shows_traceback(self, terraform_state):
         with patch("subprocess.run", side_effect=RuntimeError("unexpected crash")):

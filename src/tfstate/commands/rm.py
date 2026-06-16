@@ -20,6 +20,7 @@ def rm(
     address: str = typer.Argument(..., help="Resource address to remove"),
     force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
+    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
 ) -> None:
     try:
@@ -50,19 +51,21 @@ def rm(
             raise typer.Exit(0)
 
     try:
-        backup_path = Path(backup) if backup else Path(workspace) / "terraform.tfstate.backup"
-        try:
-            pull_result = subprocess.run(
-                ["terraform", "state", "pull"],
-                cwd=workspace,
-                capture_output=True,
-                text=True,
-            )
-            if pull_result.returncode != 0:
-                raise RuntimeError(f"terraform state pull failed:\n{pull_result.stderr}")
-            backup_path.write_text(pull_result.stdout)
-        except OSError as e:
-            raise RuntimeError(f"Cannot create backup at {backup_path}: {e}")
+        backup_path: Optional[Path] = None
+        if not no_backup:
+            backup_path = Path(backup) if backup else Path(workspace) / "terraform.tfstate.backup"
+            try:
+                pull_result = subprocess.run(
+                    ["terraform", "state", "pull"],
+                    cwd=workspace,
+                    capture_output=True,
+                    text=True,
+                )
+                if pull_result.returncode != 0:
+                    raise RuntimeError(f"terraform state pull failed:\n{pull_result.stderr}")
+                backup_path.write_text(pull_result.stdout)
+            except OSError as e:
+                raise RuntimeError(f"Cannot create backup at {backup_path}: {e}")
 
         rm_result = subprocess.run(
             ["terraform", "state", "rm", address],
@@ -100,7 +103,7 @@ def rm(
                 "The removal succeeded but the cached state may be stale.[/yellow]"
             )
 
-        print_rm(address, str(backup_path), new_state, rm_result.stdout)
+        print_rm(address, str(backup_path) if backup_path else "(none)", new_state, rm_result.stdout)
 
     except RuntimeError as e:
         typer.echo(f"Error: {e}", err=True)
