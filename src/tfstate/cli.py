@@ -6,6 +6,8 @@ from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
+from tfstate.session import clear_session
+from tfstate.output import console
 
 app = typer.Typer(
     name="tfstate",
@@ -61,6 +63,13 @@ def pull_cmd(
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
 ) -> None:
     pull(s3_uri, output=output, profile=profile, region=region)
+
+
+@app.command("clear")
+def clear_cmd() -> None:
+    """Clear cached session state"""
+    clear_session()
+    console.print("[green]Session cache cleared.[/green]")
 
 
 def main() -> None:

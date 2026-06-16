@@ -11,6 +11,7 @@ from rich.status import Status
 
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode, set_workspace
+from tfstate.session import save_session
 from tfstate.output import print_init, console
 
 
@@ -198,6 +199,7 @@ def init(
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
+                save_session(state, source, backend, terraform_mode=True, workspace=workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
                 set_state(state, source, backend)
@@ -206,6 +208,7 @@ def init(
                     ws, _ = resolve_workspace(output)
                     (Path(ws) / "state.json").write_text(content)
                     set_workspace(ws)
+                save_session(state, source, backend, workspace=ws)
                 print_init(state, source, backend, workspace=ws)
         else:
             content, source = load_local_file(state_path)
@@ -224,6 +227,7 @@ def init(
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
+                save_session(state, source, backend, terraform_mode=True, workspace=workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
                 set_state(state, source, backend)
@@ -232,6 +236,7 @@ def init(
                     ws, _ = resolve_workspace(output)
                     (Path(ws) / "state.json").write_text(content)
                     set_workspace(ws)
+                save_session(state, source, backend, workspace=ws)
                 print_init(state, source, backend, workspace=ws)
 
     except FileNotFoundError as e:

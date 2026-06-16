@@ -4,6 +4,7 @@ from typing import Optional
 from tfstate.parser import parse_state_file, StateParseError
 from tfstate.output import print_list
 from tfstate.state_store import require_state
+from tfstate.session import load_session
 
 
 def list_resources(
@@ -20,9 +21,13 @@ def list_resources(
     except StateParseError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
-    except RuntimeError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    except RuntimeError:
+        cached = load_session()
+        if cached is None:
+            typer.echo("Error: No state loaded. Run 'tfstate init' first.", err=True)
+            raise typer.Exit(1)
+        state, _, _, _, _ = cached
+        print_list(state, resource_type=type, module=module)
 
 
 if __name__ == "__main__":
