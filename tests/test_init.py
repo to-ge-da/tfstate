@@ -2,7 +2,13 @@ import pytest
 from pathlib import Path
 from typer.testing import CliRunner
 
-from tfstate.commands.init import is_s3_uri, parse_s3_uri, generate_backend_tf, check_terraform_installed
+from tfstate.commands.init import (
+    is_s3_uri,
+    parse_s3_uri,
+    generate_backend_tf,
+    check_terraform_installed,
+    resolve_workspace,
+)
 from tfstate.cli import app
 
 
@@ -81,11 +87,80 @@ class TestInitCommandHelp:
         assert "--region" in result.stdout
         assert "--debug" in result.stdout
         assert "--terraform" in result.stdout
+        assert "--output" in result.stdout
+        assert "-o" in result.stdout
+
+
+class TestInitOutputFlag:
+    def test_local_init_with_output_creates_workspace(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        ws_dir = tmp_path / "my-workspace"
+        result = runner.invoke(app, ["init", str(fixture), "-o", str(ws_dir)])
+        assert result.exit_code == 0
+        assert ws_dir.is_dir()
+        assert (ws_dir / "state.json").exists()
+        assert "Workspace" in result.stdout
+
+    def test_local_init_without_output_no_workspace(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        result = runner.invoke(app, ["init", str(fixture)])
+        assert result.exit_code == 0
+        assert "Workspace" not in result.stdout
+
+    def test_output_dir_non_empty_error(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        ws_dir = tmp_path / "occupied"
+        ws_dir.mkdir()
+        (ws_dir / "dummy.txt").write_text("something")
+        result = runner.invoke(app, ["init", str(fixture), "-o", str(ws_dir)])
+        assert result.exit_code == 1
+        assert "not empty" in result.output
+
+    def test_output_parent_not_exists_error(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        result = runner.invoke(
+            app, ["init", str(fixture), "-o", str(tmp_path / "nonexistent" / "child")]
+        )
+        assert result.exit_code == 1
+        assert "Parent directory" in result.output
+
+
+class TestResolveWorkspace:
+    def test_creates_new_directory(self, tmp_path: Path):
+        ws = tmp_path / "new-ws"
+        path, reused = resolve_workspace(str(ws))
+        assert ws.is_dir()
+        assert reused is True
+
+    def test_reuses_empty_directory(self, tmp_path: Path):
+        ws = tmp_path / "empty-ws"
+        ws.mkdir()
+        path, reused = resolve_workspace(str(ws))
+        assert ws.is_dir()
+        assert reused is True
+
+    def test_raises_on_non_empty_directory(self, tmp_path: Path):
+        ws = tmp_path / "occupied"
+        ws.mkdir()
+        (ws / "file.txt").write_text("x")
+        with pytest.raises(ValueError, match="not empty"):
+            resolve_workspace(str(ws))
+
+    def test_raises_on_missing_parent(self, tmp_path: Path):
+        with pytest.raises(ValueError, match="Parent directory"):
+            resolve_workspace(str(tmp_path / "missing" / "child"))
+
+    def test_no_output_returns_temp(self):
+        path, reused = resolve_workspace(None)
+        assert "tfstate-" in path
+        assert reused is False
 
 
 class TestTerraformBackend:
     def test_generate_backend_tf(self):
-        content = generate_backend_tf("my-bucket", "path/to/state.tfstate", "us-east-1", "my-profile")
+        content = generate_backend_tf(
+            "my-bucket", "path/to/state.tfstate", "us-east-1", "my-profile"
+        )
         assert 'bucket = "my-bucket"' in content
         assert 'key    = "path/to/state.tfstate"' in content
         assert 'region = "us-east-1"' in content

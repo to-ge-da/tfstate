@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from rich.status import Status
 
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
-from tfstate.state_store import set_state, set_terraform_mode
+from tfstate.state_store import set_state, set_terraform_mode, set_workspace
 from tfstate.output import print_init, console
 
 
@@ -30,9 +30,7 @@ def parse_s3_uri(uri: str) -> tuple[str, str]:
     return bucket, key
 
 
-def download_from_s3(
-    uri: str, profile: Optional[str], region: Optional[str]
-) -> tuple[str, str]:
+def download_from_s3(uri: str, profile: Optional[str], region: Optional[str]) -> tuple[str, str]:
     bucket, key = parse_s3_uri(uri)
 
     session_kwargs = {}
@@ -76,9 +74,11 @@ def check_terraform_installed() -> bool:
     return shutil.which("terraform") is not None
 
 
-def generate_backend_tf(bucket: str, key: str, region: Optional[str], profile: Optional[str]) -> str:
+def generate_backend_tf(
+    bucket: str, key: str, region: Optional[str], profile: Optional[str]
+) -> str:
     lines = [
-        'terraform {',
+        "terraform {",
         '  backend "s3" {',
         f'    bucket = "{bucket}"',
         f'    key    = "{key}"',
@@ -93,13 +93,13 @@ def generate_backend_tf(bucket: str, key: str, region: Optional[str], profile: O
 
 
 def init_terraform_backend(
-    s3_uri: str, profile: Optional[str], region: Optional[str]
+    s3_uri: str, profile: Optional[str], region: Optional[str], workspace: Optional[str] = None
 ) -> tuple[str, dict]:
     bucket, key = parse_s3_uri(s3_uri)
 
-    workspace = tempfile.mkdtemp(prefix="tfstate-")
+    workspace_path = workspace or tempfile.mkdtemp(prefix="tfstate-")
 
-    backend_tf_path = Path(workspace) / "backend.tf"
+    backend_tf_path = Path(workspace_path) / "backend.tf"
     backend_tf_path.write_text(generate_backend_tf(bucket, key, region, profile))
 
     env = None
@@ -109,7 +109,7 @@ def init_terraform_backend(
     with Status("Initializing Terraform backend...", console=console):
         result = subprocess.run(
             ["terraform", "init"],
-            cwd=workspace,
+            cwd=workspace_path,
             capture_output=True,
             text=True,
             env=env,
@@ -125,7 +125,51 @@ def init_terraform_backend(
         "profile": profile,
     }
 
+    return workspace_path, backend_config
+
+
+def init_local_terraform_backend(local_path: Path, workspace: str) -> tuple[str, dict]:
+    workspace_path = Path(workspace)
+    shutil.copy2(local_path, workspace_path / "terraform.tfstate")
+
+    with Status("Initializing Terraform backend...", console=console):
+        result = subprocess.run(
+            ["terraform", "init"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+        )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"terraform init failed:\n{result.stderr}")
+
+    backend_config = {
+        "backend": "local",
+        "path": str(workspace_path / "terraform.tfstate"),
+    }
+
     return workspace, backend_config
+
+
+def resolve_workspace(output: Optional[str]) -> tuple[str, bool]:
+    if output:
+        output_path = Path(output).resolve()
+        if not output_path.parent.exists():
+            raise ValueError(
+                f"Parent directory of '{output}' does not exist. "
+                "Create it first or choose a different path."
+            )
+        if output_path.exists():
+            if any(output_path.iterdir()):
+                raise ValueError(
+                    f"Workspace directory '{output}' exists and is not empty. "
+                    "Choose a different path or remove it."
+                )
+            console.print(f"[yellow]Reusing existing empty directory: {output_path}[/yellow]")
+        else:
+            output_path.mkdir()
+        return str(output_path), True
+    return tempfile.mkdtemp(prefix="tfstate-"), False
 
 
 def init(
@@ -134,6 +178,7 @@ def init(
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
     terraform: bool = typer.Option(False, "--terraform", help="Initialize real Terraform backend"),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="Custom workspace directory"),
 ) -> None:
     try:
         if is_s3_uri(state_path):
@@ -143,19 +188,49 @@ def init(
 
             if terraform:
                 if not check_terraform_installed():
-                    raise RuntimeError("terraform binary not found. Is Terraform installed and in PATH?")
-                workspace, backend_config = init_terraform_backend(state_path, profile, region)
+                    raise RuntimeError(
+                        "terraform binary not found. Is Terraform installed and in PATH?"
+                    )
+                workspace, _ = resolve_workspace(output)
+                workspace, backend_config = init_terraform_backend(
+                    state_path, profile, region, workspace=workspace
+                )
                 set_terraform_mode(workspace, backend_config)
-                print_init(state, source, backend, terraform_mode=True)
+                set_workspace(workspace)
+                print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
                 set_state(state, source)
-                print_init(state, source, backend)
+                ws = None
+                if output:
+                    ws, _ = resolve_workspace(output)
+                    (Path(ws) / "state.json").write_text(content)
+                    set_workspace(ws)
+                print_init(state, source, backend, workspace=ws)
         else:
             content, source = load_local_file(state_path)
             backend = "local"
             state = parse_state_file(Path(state_path))
-            set_state(state, source)
-            print_init(state, source, backend)
+
+            if terraform:
+                if not check_terraform_installed():
+                    raise RuntimeError(
+                        "terraform binary not found. Is Terraform installed and in PATH?"
+                    )
+                workspace, _ = resolve_workspace(output)
+                workspace, backend_config = init_local_terraform_backend(
+                    Path(state_path), workspace
+                )
+                set_terraform_mode(workspace, backend_config)
+                set_workspace(workspace)
+                print_init(state, source, backend, terraform_mode=True, workspace=workspace)
+            else:
+                set_state(state, source)
+                ws = None
+                if output:
+                    ws, _ = resolve_workspace(output)
+                    (Path(ws) / "state.json").write_text(content)
+                    set_workspace(ws)
+                print_init(state, source, backend, workspace=ws)
 
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
