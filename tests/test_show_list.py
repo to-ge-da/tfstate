@@ -101,14 +101,40 @@ class TestListCommand:
     def test_list_filter_by_type_no_match(self):
         result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "nonexistent"])
         assert result.exit_code == 0
-        assert "No resources found" in result.stdout
+        assert "No resources found with type: nonexistent" in result.stdout
+        assert "Available types in state" in result.stdout
         assert "aws_vpc" in result.stdout
+
+    def test_list_filter_by_type_typo(self):
+        result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "aws_instanc"])
+        assert result.exit_code == 0
+        assert "No resources found with type: aws_instanc" in result.stdout
+        assert "Did you mean:" in result.stdout
+        assert "aws_instance" in result.stdout
+        assert "Available types" not in result.stdout
+
+    def test_list_filter_by_type_typo_combined(self):
+        result = runner.invoke(
+            app, ["list", str(BASIC_FIXTURE), "--type", "aws_instanc", "--module", "module.vpc"]
+        )
+        assert result.exit_code == 0
+        assert "Did you mean:" in result.stdout
+        assert "aws_instance" in result.stdout
 
     def test_list_filter_by_module_no_match(self):
         result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--module", "nonexistent"])
         assert result.exit_code == 0
-        assert "No resources found" in result.stdout
+        assert "No resources found with module: nonexistent" in result.stdout
+        assert "Available modules in state" in result.stdout
         assert "module.vpc" in result.stdout
+
+    def test_list_filter_by_module_typo(self):
+        result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--module", "module.vp"])
+        assert result.exit_code == 0
+        assert "No resources found with module: module.vp" in result.stdout
+        assert "Did you mean:" in result.stdout
+        assert "module.vpc" in result.stdout
+        assert "Available modules" not in result.stdout
 
     def test_list_filter_by_type_no_match_connected(self):
         result = runner.invoke(app, ["init", str(BASIC_FIXTURE)])
@@ -117,6 +143,7 @@ class TestListCommand:
         result = runner.invoke(app, ["list", "--type", "nonexistent"])
         assert result.exit_code == 0
         assert "No resources found" in result.stdout
+        assert "Available types in state" in result.stdout
         assert "aws_vpc" in result.stdout
 
     def test_list_filter_by_module_no_match_connected(self):
@@ -126,6 +153,7 @@ class TestListCommand:
         result = runner.invoke(app, ["list", "--module", "nonexistent"])
         assert result.exit_code == 0
         assert "No resources found" in result.stdout
+        assert "Available modules in state" in result.stdout
         assert "module.vpc" in result.stdout
 
     def test_list_filter_combined_no_match(self):
@@ -134,6 +162,14 @@ class TestListCommand:
         )
         assert result.exit_code == 0
         assert "No resources found" in result.stdout
+
+    def test_list_filter_combined_correct_type_bad_module(self):
+        result = runner.invoke(
+            app, ["list", str(BASIC_FIXTURE), "--type", "aws_vpc", "--module", "nonexistent"]
+        )
+        assert result.exit_code == 0
+        assert "Available types in state" in result.stdout
+        assert "Available modules in state" in result.stdout
 
     def test_list_offline_file_not_found(self):
         result = runner.invoke(app, ["list", "/nonexistent/path.json"])
@@ -153,3 +189,4 @@ class TestShowListHelp:
         assert "STATE_FILE" in result.stdout
         assert "--type" in result.stdout
         assert "--module" in result.stdout
+        assert "--show-all-types" in result.stdout
