@@ -4,16 +4,19 @@ from tfstate.models import State
 
 _current_state: Optional[State] = None
 _state_source: Optional[str] = None
+_backend_type: Optional[str] = None
 _is_terraform_mode: bool = False
 _terraform_workspace: Optional[str] = None
 _backend_config: Optional[dict] = None
 _workspace_path: Optional[str] = None
 
 
-def set_state(state: State, source: str) -> None:
-    global _current_state, _state_source
+def set_state(state: State, source: str, backend: Optional[str] = None) -> None:
+    global _current_state, _state_source, _backend_type
     _current_state = state
     _state_source = source
+    if backend:
+        _backend_type = backend
 
 
 def get_state() -> Optional[State]:
@@ -37,12 +40,14 @@ def clear_state() -> None:
     global \
         _current_state, \
         _state_source, \
+        _backend_type, \
         _is_terraform_mode, \
         _terraform_workspace, \
         _backend_config, \
         _workspace_path
     _current_state = None
     _state_source = None
+    _backend_type = None
     _is_terraform_mode = False
     _terraform_workspace = None
     _backend_config = None
@@ -72,3 +77,7 @@ def get_terraform_workspace() -> Optional[str]:
 
 def get_backend_config() -> Optional[dict]:
     return _backend_config
+
+
+def get_backend_type() -> Optional[str]:
+    return _backend_type

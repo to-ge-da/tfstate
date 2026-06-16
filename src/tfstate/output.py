@@ -41,8 +41,10 @@ def print_init(
             console.print(f"  - {name}")
 
 
-def print_show(state: State, file_path: str = "unknown") -> None:
+def print_show(state: State, file_path: str = "unknown", backend_type: Optional[str] = None) -> None:
     console.print(f"\n[bold]State File:[/bold] {file_path}")
+    if backend_type:
+        console.print(f"[bold]Backend:[/bold] {backend_type}")
     console.print(f"[bold]Terraform Version:[/bold] {state.terraform_version}")
     console.print(f"[bold]Serial:[/bold] {state.serial}")
     console.print(f"[bold]Lineage:[/bold] {state.lineage}")
