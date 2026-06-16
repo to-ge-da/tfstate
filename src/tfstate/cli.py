@@ -51,8 +51,11 @@ def list_cmd(
     ),
     type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
     module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    show_all_types: Annotated[
+        bool, typer.Option("--show-all-types", help="Show all available types without truncation")
+    ] = False,
 ) -> None:
-    list_resources(state_file, type=type, module=module)
+    list_resources(state_file, type=type, module=module, show_all_types=show_all_types)
 
 
 @app.command("pull")

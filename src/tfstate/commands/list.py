@@ -11,13 +11,14 @@ def list_resources(
     state_file: Optional[Path] = None,
     type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
     module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    show_all_types: bool = False,
 ) -> None:
     try:
         if state_file:
             state = parse_state_file(state_file)
         else:
             state = require_state()
-        print_list(state, resource_type=type, module=module)
+        print_list(state, resource_type=type, module=module, show_all_types=show_all_types)
     except StateParseError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
@@ -27,7 +28,7 @@ def list_resources(
             typer.echo("Error: No state loaded. Run 'tfstate init' first.", err=True)
             raise typer.Exit(1)
         state, _, _, _, _ = cached
-        print_list(state, resource_type=type, module=module)
+        print_list(state, resource_type=type, module=module, show_all_types=show_all_types)
 
 
 if __name__ == "__main__":

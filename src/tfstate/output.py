@@ -71,8 +71,13 @@ def print_show(state: State, file_path: str = "unknown", backend_type: Optional[
 
 
 def print_list(
-    state: State, resource_type: Optional[str] = None, module: Optional[str] = None
+    state: State,
+    resource_type: Optional[str] = None,
+    module: Optional[str] = None,
+    show_all_types: bool = False,
 ) -> None:
+    from difflib import get_close_matches
+
     matched = 0
     for resource in state.resources:
         if resource_type and resource.type != resource_type:
@@ -90,14 +95,45 @@ def print_list(
             parts.append(f"type: {resource_type}")
         if module:
             parts.append(f"module: {module}")
-        console.print(f"[yellow]No resources found matching filter ({', '.join(parts)})[/yellow]")
+        console.print(f"[yellow]No resources found with {', '.join(parts)}[/yellow]")
 
-        if module:
-            available = sorted(set(r.module for r in state.resources if r.module))
-            console.print(f"Available modules: {', '.join(available) or '(none)'}")
         if resource_type:
             available = sorted(set(r.type for r in state.resources))
-            console.print(f"Available types: {', '.join(available)}")
+            if resource_type not in available:
+                suggestions = get_close_matches(resource_type, available, n=3, cutoff=0.6)
+                if suggestions:
+                    console.print("\n[yellow]Did you mean:[/yellow]")
+                    for s in suggestions:
+                        console.print(f"  - {s}")
+                    console.print("\n[dim]Use --show-all-types to see all available types[/dim]")
+                    return
+            display = available if show_all_types else available[:5]
+            console.print(f"\nAvailable types in state ({len(available)} total):")
+            for t in display:
+                console.print(f"  - {t}")
+            if not show_all_types and len(available) > 5:
+                console.print(f"  ... and {len(available) - 5} more")
+
+        if module:
+            available_mods = sorted(set(r.module for r in state.resources if r.module))
+            has_root = any(r.module is None for r in state.resources)
+            mod_names = list(available_mods)
+            if has_root:
+                mod_names = ["(root)"] + mod_names
+
+            if module not in available_mods and module != "":
+                suggestions = get_close_matches(module, mod_names, n=3, cutoff=0.6)
+                if suggestions:
+                    console.print("\n[yellow]Did you mean:[/yellow]")
+                    for s in suggestions:
+                        console.print(f"  - {s}")
+                    return
+            display = mod_names if show_all_types else mod_names[:5]
+            console.print(f"\nAvailable modules in state ({len(mod_names)} total):")
+            for m in display:
+                console.print(f"  - {m}")
+            if not show_all_types and len(mod_names) > 5:
+                console.print(f"  ... and {len(mod_names) - 5} more")
 
 
 def print_get(state: State, address: str) -> None:
