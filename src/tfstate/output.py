@@ -6,7 +6,13 @@ from tfstate.models import State
 console = Console()
 
 
-def print_init(state: State, source: str, backend: str, terraform_mode: bool = False) -> None:
+def print_init(
+    state: State,
+    source: str,
+    backend: str,
+    terraform_mode: bool = False,
+    workspace: Optional[str] = None,
+) -> None:
     mode_label = "Terraform backend" if terraform_mode else f"{backend} backend"
     console.print(f"\n[bold green]Initialized state from {mode_label}[/bold green]")
     console.print(f"[bold]Source:[/bold] {source}")
@@ -17,11 +23,12 @@ def print_init(state: State, source: str, backend: str, terraform_mode: bool = F
     if terraform_mode:
         console.print("[dim]Real Terraform backend initialized - state manipulation enabled[/dim]")
 
+    if workspace:
+        console.print(f"[bold]Workspace:[/bold] {workspace}")
+
     by_type = state.resources_by_type()
     total_resources = sum(len(resources) for resources in by_type.values())
-    total_instances = sum(
-        len(r.instances) for resources in by_type.values() for r in resources
-    )
+    total_instances = sum(len(r.instances) for resources in by_type.values() for r in resources)
 
     console.print(f"\n[bold]Resources:[/bold] {total_resources} ({total_instances} instances)")
     for res_type, resources in sorted(by_type.items()):
@@ -61,7 +68,9 @@ def print_show(state: State, file_path: str = "unknown") -> None:
             console.print(f"  - {name}{sensitive_marker}")
 
 
-def print_list(state: State, resource_type: Optional[str] = None, module: Optional[str] = None) -> None:
+def print_list(
+    state: State, resource_type: Optional[str] = None, module: Optional[str] = None
+) -> None:
     for resource in state.resources:
         if resource_type and resource.type != resource_type:
             continue

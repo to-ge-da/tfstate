@@ -15,6 +15,10 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
+# Coverage
+.coverage
+*,cover
+
 # Build artifacts
 dist/
 build/

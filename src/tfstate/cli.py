@@ -19,9 +19,16 @@ def init(
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
     debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
-    terraform: Annotated[bool, typer.Option("--terraform", help="Initialize real Terraform backend")] = False,
+    terraform: Annotated[
+        bool, typer.Option("--terraform", help="Initialize real Terraform backend")
+    ] = False,
+    output: Annotated[
+        Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
+    ] = None,
 ) -> None:
-    init_cmd(state_path, profile=profile, region=region, debug=debug, terraform=terraform)
+    init_cmd(
+        state_path, profile=profile, region=region, debug=debug, terraform=terraform, output=output
+    )
 
 
 @app.command("show")
@@ -41,7 +48,9 @@ def list_cmd(
 @app.command("pull")
 def pull_cmd(
     s3_uri: str,
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output file (default: stdout)"
+    ),
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
 ) -> None:

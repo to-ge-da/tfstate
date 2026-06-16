@@ -7,6 +7,7 @@ _state_source: Optional[str] = None
 _is_terraform_mode: bool = False
 _terraform_workspace: Optional[str] = None
 _backend_config: Optional[dict] = None
+_workspace_path: Optional[str] = None
 
 
 def set_state(state: State, source: str) -> None:
@@ -23,13 +24,29 @@ def get_state_source() -> Optional[str]:
     return _state_source
 
 
+def set_workspace(path: str) -> None:
+    global _workspace_path
+    _workspace_path = path
+
+
+def get_workspace() -> Optional[str]:
+    return _workspace_path
+
+
 def clear_state() -> None:
-    global _current_state, _state_source, _is_terraform_mode, _terraform_workspace, _backend_config
+    global \
+        _current_state, \
+        _state_source, \
+        _is_terraform_mode, \
+        _terraform_workspace, \
+        _backend_config, \
+        _workspace_path
     _current_state = None
     _state_source = None
     _is_terraform_mode = False
     _terraform_workspace = None
     _backend_config = None
+    _workspace_path = None
 
 
 def require_state() -> State:
