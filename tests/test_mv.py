@@ -51,9 +51,11 @@ class TestMvHelp:
         assert result.exit_code == 0
         assert "SRC" in result.stdout
         assert "DST" in result.stdout
-        assert "--force" in result.stdout
+        assert "--yes" in result.stdout
+        assert "-y" in result.stdout
         assert "--backup" in result.stdout
         assert "--debug" in result.stdout
+        assert "--force" not in result.stdout
 
 
 class TestMvErrors:
@@ -74,7 +76,7 @@ class TestMvErrors:
     def test_mv_src_not_found(self, terraform_state):
         with patch("subprocess.run"):
             result = runner.invoke(
-                app, ["mv", "nonexistent.resource.foo", "new.module.type.name", "--force"]
+                app, ["mv", "nonexistent.resource.foo", "new.module.type.name", "--yes"]
             )
         assert result.exit_code == 1
         assert "Source resource not found" in result.output
@@ -87,12 +89,41 @@ class TestMvErrors:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "aws_instance.bastion",
-                    "--force",
+                    "--yes",
                 ],
             )
         assert result.exit_code == 1
         assert "already exists" in result.output
         assert "Refusing to overwrite" in result.output
+
+    def test_mv_force_deprecated_alias(self, terraform_state):
+        state, workspace = terraform_state
+        state_json = state.model_dump_json(indent=2)
+
+        mock_pull = MagicMock(returncode=0, stdout=state_json, stderr="")
+        mock_mv = MagicMock(
+            returncode=0,
+            stdout="Moved module.vpc.aws_vpc.main to module.vpc.aws_vpc.moved.\n",
+            stderr="",
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=state_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_pull, mock_mv, mock_pull_after]
+            result = runner.invoke(
+                app,
+                [
+                    "mv",
+                    "module.vpc.aws_vpc.main",
+                    "module.vpc.aws_vpc.moved",
+                    "--force",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert "deprecated" in result.output.lower()
+        assert "--yes" in result.output
+        assert "Resource moved:" in result.stdout
 
     def test_mv_backup_failure_shows_error(self, terraform_state, tmp_path):
         state, _ = terraform_state
@@ -109,7 +140,7 @@ class TestMvErrors:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                 ],
             )
 
@@ -132,7 +163,7 @@ class TestMvErrors:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                 ],
             )
         assert result.exit_code == 1
@@ -159,7 +190,7 @@ class TestMvErrors:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                 ],
             )
 
@@ -190,7 +221,7 @@ class TestMvSuccess:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                 ],
             )
 
@@ -270,7 +301,7 @@ class TestMvSuccess:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                     "--backup",
                     str(custom_backup),
                 ],
@@ -291,7 +322,7 @@ class TestMvDebug:
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
-                    "--force",
+                    "--yes",
                     "--debug",
                 ],
             )

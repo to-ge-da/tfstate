@@ -60,9 +60,11 @@ class TestRmHelp:
         result = runner.invoke(app, ["rm", "--help"])
         assert result.exit_code == 0
         assert "ADDRESS" in result.stdout
-        assert "--force" in result.stdout
+        assert "--yes" in result.stdout
+        assert "-y" in result.stdout
         assert "--backup" in result.stdout
         assert "--debug" in result.stdout
+        assert "--force" not in result.stdout
 
 
 class TestRmErrors:
@@ -81,10 +83,34 @@ class TestRmErrors:
     def test_rm_address_not_found(self, terraform_state):
         with patch("subprocess.run"):
             result = runner.invoke(
-                app, ["rm", "nonexistent.resource.foo", "--force"]
+                app, ["rm", "nonexistent.resource.foo", "--yes"]
             )
         assert result.exit_code == 1
         assert "not found" in result.output
+
+    def test_rm_force_deprecated_alias(self, terraform_state):
+        state, workspace = terraform_state
+        state_json = state.model_dump_json(indent=2)
+        updated_json = state_without("module.vpc.aws_vpc.main")
+
+        mock_pull = MagicMock(returncode=0, stdout=state_json, stderr="")
+        mock_rm = MagicMock(
+            returncode=0,
+            stdout="Removed module.vpc.aws_vpc.main from state.\n",
+            stderr="",
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
+            result = runner.invoke(
+                app, ["rm", "module.vpc.aws_vpc.main", "--force"]
+            )
+
+        assert result.exit_code == 0
+        assert "deprecated" in result.output.lower()
+        assert "--yes" in result.output
+        assert "Resource removed:" in result.stdout
 
     def test_rm_backup_failure_shows_error(self, terraform_state, tmp_path):
         state, _ = terraform_state
@@ -97,7 +123,7 @@ class TestRmErrors:
             patch("pathlib.Path.write_text", side_effect=OSError("read-only filesystem")),
         ):
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes"]
             )
 
         assert result.exit_code == 1
@@ -114,7 +140,7 @@ class TestRmErrors:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = [mock_pull, mock_rm_fail]
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes"]
             )
         assert result.exit_code == 1
         assert "terraform state rm failed" in result.output
@@ -135,7 +161,7 @@ class TestRmErrors:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = [mock_pull, mock_rm, mock_pull_fail]
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes"]
             )
 
         assert result.exit_code == 0
@@ -161,7 +187,7 @@ class TestRmSuccess:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes"]
             )
 
         assert result.exit_code == 0
@@ -227,7 +253,7 @@ class TestRmSuccess:
             mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
             result = runner.invoke(
                 app, [
-                    "rm", "module.vpc.aws_vpc.main", "--force",
+                    "rm", "module.vpc.aws_vpc.main", "--yes",
                     "--backup", str(custom_backup),
                 ]
             )
@@ -254,7 +280,7 @@ class TestRmNoBackup:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = [mock_rm, mock_pull_after]
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force", "--no-backup"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes", "--no-backup"]
             )
 
         assert result.exit_code == 0
@@ -275,7 +301,7 @@ class TestRmNoBackup:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = [mock_rm, mock_pull_after]
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force", "--no-backup"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes", "--no-backup"]
             )
 
         assert result.exit_code == 0
@@ -291,7 +317,7 @@ class TestRmDebug:
     def test_rm_debug_flag_shows_traceback(self, terraform_state):
         with patch("subprocess.run", side_effect=RuntimeError("unexpected crash")):
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--force", "--debug"]
+                app, ["rm", "module.vpc.aws_vpc.main", "--yes", "--debug"]
             )
 
         assert result.exit_code == 1

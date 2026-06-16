@@ -74,22 +74,28 @@ def pull_cmd(
 def mv(
     src: str = typer.Argument(..., help="Source resource address"),
     dst: str = typer.Argument(..., help="Destination resource address"),
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", hidden=True, help="Deprecated: use --yes")
+    ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
-    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
 ) -> None:
-    mv_cmd(src, dst, force=force, backup=backup, debug=debug)
+    mv_cmd(src, dst, yes=yes, force=force, backup=backup, debug=debug)
 
 
 @app.command("rm")
 def rm(
     address: str = typer.Argument(..., help="Resource address to remove"),
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", hidden=True, help="Deprecated: use --yes")
+    ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
-    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
-    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+    no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
+    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
 ) -> None:
-    rm_cmd(address, force=force, backup=backup, no_backup=no_backup, debug=debug)
+    rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup, debug=debug)
 
 
 @app.command("clear")
