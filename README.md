@@ -48,11 +48,8 @@ tfstate get state.json aws_vpc.main
 
 ## Documentation
 
+- [Workflows](docs/WORKFLOW.md) — End-to-end guides for offline and connected modes
 - [init command](docs/init.md) — Initialize state from S3 or local files
-- [Project Specification](docs/SPEC.md) — Architecture, commands, and implementation plan
-
-## Documentation
-
 - [Project Specification](docs/SPEC.md) — Architecture, commands, and implementation plan
 
 ## Status
