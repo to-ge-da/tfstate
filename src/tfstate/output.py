@@ -145,3 +145,11 @@ def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -
     console.print(f"[bold]Resources remaining:[/bold] {remaining}")
     if rm_output.strip():
         console.print(rm_output.strip())
+
+
+def print_mv(src: str, dst: str, backup_path: str, new_state: State, mv_output: str) -> None:
+    console.print(f"[bold green]Resource moved: {src} -> {dst}[/bold green]")
+    console.print(f"[bold]Backup:[/bold] {backup_path}")
+    console.print(f"[bold]Resources:[/bold] {len(new_state.resources)} total")
+    if mv_output.strip():
+        console.print(mv_output.strip())
