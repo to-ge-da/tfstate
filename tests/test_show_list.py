@@ -4,6 +4,7 @@ from typer.testing import CliRunner
 
 from tfstate.cli import app
 from tfstate.state_store import clear_state
+from tfstate.session import clear_session
 
 
 runner = CliRunner()
@@ -12,6 +13,7 @@ runner = CliRunner()
 @pytest.fixture(autouse=True)
 def clear_state_before():
     clear_state()
+    clear_session()
 
 
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
