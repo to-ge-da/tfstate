@@ -175,11 +175,11 @@ def resolve_workspace(output: Optional[str]) -> tuple[str, bool]:
 
 def init(
     state_path: str,
-    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
-    region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
-    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
-    terraform: bool = typer.Option(False, "--terraform", help="Initialize real Terraform backend"),
-    output: Optional[str] = typer.Option(None, "-o", "--output", help="Custom workspace directory"),
+    profile: Optional[str] = None,
+    region: Optional[str] = None,
+    debug: bool = False,
+    terraform: bool = False,
+    output: Optional[str] = None,
 ) -> None:
     try:
         if is_s3_uri(state_path):

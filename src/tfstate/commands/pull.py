@@ -18,9 +18,9 @@ def parse_s3_uri(uri: str) -> tuple[str, str]:
 
 def pull(
     s3_uri: str,
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
-    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
-    region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
+    output: Optional[Path] = None,
+    profile: Optional[str] = None,
+    region: Optional[str] = None,
 ) -> None:
     try:
         bucket, key = parse_s3_uri(s3_uri)

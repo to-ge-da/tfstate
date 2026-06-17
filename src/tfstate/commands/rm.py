@@ -17,12 +17,12 @@ from tfstate.output import print_rm, console, resolve_yes
 
 
 def rm(
-    address: str = typer.Argument(..., help="Resource address to remove"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    force: bool = typer.Option(False, "--force", hidden=True, help="Deprecated: use --yes"),
-    backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
-    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
-    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+    address: str,
+    yes: bool = False,
+    force: bool = False,
+    backup: Optional[str] = None,
+    no_backup: bool = False,
+    debug: bool = False,
 ) -> None:
     yes = resolve_yes(yes, force)
 
