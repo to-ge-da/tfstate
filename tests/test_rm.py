@@ -63,7 +63,6 @@ class TestRmHelp:
         assert "--yes" in result.stdout
         assert "-y" in result.stdout
         assert "--backup" in result.stdout
-        assert "--debug" in result.stdout
         assert "--force" not in result.stdout
 
 
@@ -317,7 +316,7 @@ class TestRmDebug:
     def test_rm_debug_flag_shows_traceback(self, terraform_state):
         with patch("subprocess.run", side_effect=RuntimeError("unexpected crash")):
             result = runner.invoke(
-                app, ["rm", "module.vpc.aws_vpc.main", "--yes", "--debug"]
+                app, ["--debug", "rm", "module.vpc.aws_vpc.main", "--yes"]
             )
 
         assert result.exit_code == 1

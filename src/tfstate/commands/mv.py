@@ -1,9 +1,9 @@
 import typer
 import subprocess
-import traceback
 from pathlib import Path
 from typing import Optional
 
+from tfstate import debug
 from tfstate.state_store import (
     require_state,
     require_terraform_mode,
@@ -22,7 +22,6 @@ def mv(
     yes: bool = False,
     force: bool = False,
     backup: Optional[str] = None,
-    debug: bool = False,
 ) -> None:
     yes = resolve_yes(yes, force)
 
@@ -68,6 +67,7 @@ def mv(
         else:
             backup_path = Path(workspace) / "terraform.tfstate.backup"
         try:
+            debug.logger.debug("Running: terraform state pull (backup)")
             pull_result = subprocess.run(
                 ["terraform", "state", "pull"],
                 cwd=workspace,
@@ -80,6 +80,7 @@ def mv(
         except OSError as e:
             raise RuntimeError(f"Cannot create backup at {backup_path}: {e}")
 
+        debug.logger.debug("Running: terraform state mv %s %s", src, dst)
         mv_result = subprocess.run(
             ["terraform", "state", "mv", src, dst],
             cwd=workspace,
@@ -122,11 +123,7 @@ def mv(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     except Exception as e:
-        if debug:
-            typer.echo(traceback.format_exc(), err=True)
-        else:
-            typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        debug.exit_with_traceback(e)
 
 
 if __name__ == "__main__":

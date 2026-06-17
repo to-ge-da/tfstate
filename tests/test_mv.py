@@ -54,7 +54,6 @@ class TestMvHelp:
         assert "--yes" in result.stdout
         assert "-y" in result.stdout
         assert "--backup" in result.stdout
-        assert "--debug" in result.stdout
         assert "--force" not in result.stdout
 
 
@@ -319,11 +318,11 @@ class TestMvDebug:
             result = runner.invoke(
                 app,
                 [
+                    "--debug",
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
                     "--yes",
-                    "--debug",
                 ],
             )
 

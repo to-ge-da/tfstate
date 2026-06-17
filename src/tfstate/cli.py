@@ -2,6 +2,7 @@ import typer
 from pathlib import Path
 from typing import Optional, Annotated
 
+from tfstate import debug as debug_module
 from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
 from tfstate.commands.pull import pull
@@ -9,7 +10,7 @@ from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
 from tfstate.commands.mv import mv as mv_cmd
 from tfstate.session import clear_session
-from tfstate.output import console
+from tfstate.output import OutputFormat, configure as configure_output, print_clear
 
 app = typer.Typer(
     name="tfstate",
@@ -17,12 +18,22 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def global_options(
+    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
+    format: Annotated[
+        OutputFormat, typer.Option("--format", "-f", help="Output format: rich, json, plain")
+    ] = OutputFormat.RICH,
+) -> None:
+    debug_module.configure(debug)
+    configure_output(format.value)
+
+
 @app.command("init")
 def init(
     state_path: str = typer.Argument(..., help="S3 URI or local file path to state file"),
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
-    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
     terraform: Annotated[
         bool, typer.Option("--terraform", help="Initialize real Terraform backend")
     ] = False,
@@ -30,9 +41,7 @@ def init(
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
     ] = None,
 ) -> None:
-    init_cmd(
-        state_path, profile=profile, region=region, debug=debug, terraform=terraform, output=output
-    )
+    init_cmd(state_path, profile=profile, region=region, terraform=terraform, output=output)
 
 
 @app.command("show")
@@ -79,9 +88,8 @@ def mv(
         bool, typer.Option("--force", hidden=True, help="Deprecated: use --yes")
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
-    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
 ) -> None:
-    mv_cmd(src, dst, yes=yes, force=force, backup=backup, debug=debug)
+    mv_cmd(src, dst, yes=yes, force=force, backup=backup)
 
 
 @app.command("rm")
@@ -93,16 +101,18 @@ def rm(
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
-    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
 ) -> None:
-    rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup, debug=debug)
+    rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
 
 
 @app.command("clear")
 def clear_cmd() -> None:
     """Clear cached session state"""
-    clear_session()
-    console.print("[green]Session cache cleared.[/green]")
+    try:
+        clear_session()
+        print_clear()
+    except Exception as e:
+        debug_module.exit_with_traceback(e)
 
 
 def main() -> None:

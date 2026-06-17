@@ -85,7 +85,6 @@ class TestInitCommandHelp:
         assert result.exit_code == 0
         assert "--profile" in result.stdout
         assert "--region" in result.stdout
-        assert "--debug" in result.stdout
         assert "--terraform" in result.stdout
         assert "--output" in result.stdout
         assert "-o" in result.stdout
