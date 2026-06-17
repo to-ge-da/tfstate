@@ -13,7 +13,7 @@ from tfstate.state_store import (
 )
 from tfstate.parser import parse_state_json
 from tfstate.session import save_session, load_session
-from tfstate.output import print_rm, console
+from tfstate.output import print_rm, console, resolve_yes
 
 
 def rm(
@@ -24,10 +24,7 @@ def rm(
     no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
 ) -> None:
-    if force:
-        if not yes:
-            console.print("[yellow]Warning: --force is deprecated, use --yes instead[/yellow]")
-        yes = True
+    yes = resolve_yes(yes, force)
 
     try:
         state = require_state()

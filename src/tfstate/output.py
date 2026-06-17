@@ -6,6 +6,15 @@ from tfstate.models import State
 console = Console()
 
 
+def resolve_yes(yes: bool, force: bool) -> bool:
+    """Resolve --force (deprecated) into --yes, emitting a warning."""
+    if force:
+        if not yes:
+            console.print("[yellow]Warning: --force is deprecated, use --yes instead[/yellow]")
+        return True
+    return yes
+
+
 def print_init(
     state: State,
     source: str,
