@@ -1,6 +1,7 @@
 import typer
 from pathlib import Path
 from typing import Optional
+from tfstate import debug
 from tfstate.parser import parse_state_file, StateParseError
 from tfstate.output import print_show
 from tfstate.state_store import get_state_source, get_backend_type, require_state
@@ -10,6 +11,7 @@ from tfstate.session import load_session
 def show(state_file: Optional[Path] = None) -> None:
     try:
         if state_file:
+            debug.logger.debug("Loading state from file: %s", state_file)
             state = parse_state_file(state_file)
             print_show(state, str(state_file))
             return
@@ -27,6 +29,8 @@ def show(state_file: Optional[Path] = None) -> None:
             raise typer.Exit(1)
         state, source, backend, _, _ = cached
         backend_type = backend
+    except Exception as e:
+        debug.exit_with_traceback(e)
 
     print_show(state, source, backend_type=backend_type)
 

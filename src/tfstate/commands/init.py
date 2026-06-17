@@ -1,6 +1,5 @@
 import typer
 import boto3
-import traceback
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +8,7 @@ from typing import Optional
 from urllib.parse import urlparse
 from rich.status import Status
 
+from tfstate import debug
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode, set_workspace
 from tfstate.session import save_session
@@ -177,15 +177,16 @@ def init(
     state_path: str,
     profile: Optional[str] = None,
     region: Optional[str] = None,
-    debug: bool = False,
     terraform: bool = False,
     output: Optional[str] = None,
 ) -> None:
     try:
+        debug.logger.debug("Initializing state from: %s", state_path)
         if is_s3_uri(state_path):
             content, source = download_from_s3(state_path, profile, region)
             backend = "S3"
             state = parse_state_json(content)
+            debug.logger.debug("Parsed state: %d resources, serial %d", len(state.resources), state.serial)
 
             if terraform:
                 if not check_terraform_installed():
@@ -214,6 +215,7 @@ def init(
             content, source = load_local_file(state_path)
             backend = "local"
             state = parse_state_file(Path(state_path))
+            debug.logger.debug("Parsed local state: %d resources, serial %d", len(state.resources), state.serial)
 
             if terraform:
                 if not check_terraform_installed():
@@ -252,11 +254,7 @@ def init(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     except Exception as e:
-        if debug:
-            typer.echo(traceback.format_exc(), err=True)
-        else:
-            typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        debug.exit_with_traceback(e)
 
 
 if __name__ == "__main__":

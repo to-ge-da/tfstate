@@ -3,6 +3,7 @@ import boto3
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
+from tfstate import debug
 
 
 def parse_s3_uri(uri: str) -> tuple[str, str]:
@@ -22,6 +23,7 @@ def pull(
     profile: Optional[str] = None,
     region: Optional[str] = None,
 ) -> None:
+    debug.logger.debug("Pulling state from S3: %s", s3_uri)
     try:
         bucket, key = parse_s3_uri(s3_uri)
     except ValueError as e:
@@ -40,8 +42,7 @@ def pull(
         response = s3.get_object(Bucket=bucket, Key=key)
         content = response["Body"].read().decode("utf-8")
     except Exception as e:
-        typer.echo(f"Error fetching from S3: {e}", err=True)
-        raise typer.Exit(1)
+        debug.exit_with_traceback(e)
 
     if output:
         output.write_text(content)
