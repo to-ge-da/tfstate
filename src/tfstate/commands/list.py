@@ -22,11 +22,12 @@ def list_resources(
             state = require_state()
         print_list(state, resource_type=type, module=module, show_all_types=show_all_types)
     except StateParseError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        debug.exit_with_traceback(e)
     except RuntimeError:
+        debug.logger.debug("No in-memory state, falling back to session cache")
         cached = load_session()
         if cached is None:
+            debug.logger.debug("No session cache found either")
             typer.echo("Error: No state loaded. Run 'tfstate init' first.", err=True)
             raise typer.Exit(1)
         state, _, _, _, _ = cached

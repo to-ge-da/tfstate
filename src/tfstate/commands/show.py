@@ -20,11 +20,12 @@ def show(state_file: Optional[Path] = None) -> None:
         source = get_state_source() or "unknown"
         backend_type = get_backend_type()
     except StateParseError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        debug.exit_with_traceback(e)
     except RuntimeError:
+        debug.logger.debug("No in-memory state, falling back to session cache")
         cached = load_session()
         if cached is None:
+            debug.logger.debug("No session cache found either")
             typer.echo("Error: No state loaded. Run 'tfstate init' first.", err=True)
             raise typer.Exit(1)
         state, source, backend, _, _ = cached
