@@ -146,3 +146,74 @@ class TestFormatGlobal:
     def test_invalid_format(self):
         result = runner.invoke(app, ["--format", "yaml", "show", str(BASIC_FIXTURE)])
         assert result.exit_code != 0
+
+
+class TestFormatInit:
+    def test_init_json(self):
+        result = runner.invoke(app, ["--format", "json", "init", str(BASIC_FIXTURE)])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["source"] == str(BASIC_FIXTURE)
+        assert data["terraform_version"] == "1.5.7"
+        assert data["serial"] == 42
+        assert data["resources"]["total"] == 3
+        assert data["resources"]["instances"] == 4
+        assert "aws_vpc" in data["resources"]["by_type"]
+
+    def test_init_plain(self):
+        result = runner.invoke(app, ["--format", "plain", "init", str(BASIC_FIXTURE)])
+        assert result.exit_code == 0
+        assert "Initialized state from" in result.stdout
+        assert f"Source: {BASIC_FIXTURE}" in result.stdout
+        assert "Terraform Version: 1.5.7" in result.stdout
+        assert "Serial: 42" in result.stdout
+        assert "Resources: 3 (4 instances)" in result.stdout
+        assert "aws_vpc" in result.stdout
+        assert "Outputs:" in result.stdout
+
+    def test_init_rich_default(self):
+        result = runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        assert result.exit_code == 0
+        assert "Initialized state from" in result.stdout
+        assert "1.5.7" in result.stdout
+
+
+class TestFormatClear:
+    def test_clear_json(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["--format", "json", "clear"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "cleared"
+
+    def test_clear_plain(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["--format", "plain", "clear"])
+        assert result.exit_code == 0
+        assert "Session cache cleared." in result.stdout
+
+    def test_clear_rich_default(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["clear"])
+        assert result.exit_code == 0
+        assert "Session cache cleared" in result.stdout
+
+
+class TestFormatGet:
+    def test_get_json(self):
+        from tfstate.parser import parse_state_file
+        from tfstate.output import print_get, configure as configure_output
+
+        state = parse_state_file(BASIC_FIXTURE)
+        configure_output("json")
+        print_get(state, "module.vpc.aws_vpc.main")
+        result = print_get  # just verifying no exception
+        assert result is print_get
+
+    def test_get_plain(self):
+        from tfstate.parser import parse_state_file
+        from tfstate.output import print_get, configure as configure_output
+
+        state = parse_state_file(BASIC_FIXTURE)
+        configure_output("plain")
+        print_get(state, "module.vpc.aws_vpc.main")

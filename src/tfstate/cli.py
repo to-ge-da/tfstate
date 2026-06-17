@@ -10,7 +10,7 @@ from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
 from tfstate.commands.mv import mv as mv_cmd
 from tfstate.session import clear_session
-from tfstate.output import console, OutputFormat, configure as configure_output, get_format
+from tfstate.output import OutputFormat, configure as configure_output, print_clear
 
 app = typer.Typer(
     name="tfstate",
@@ -110,13 +110,7 @@ def clear_cmd() -> None:
     """Clear cached session state"""
     try:
         clear_session()
-        if get_format() == "json":
-            import json
-            print(json.dumps({"status": "cleared"}))
-        elif get_format() == "plain":
-            print("Session cache cleared.")
-        else:
-            console.print("[green]Session cache cleared.[/green]")
+        print_clear()
     except Exception as e:
         debug_module.exit_with_traceback(e)
 

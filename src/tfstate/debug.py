@@ -9,10 +9,17 @@ _debug_enabled = False
 def configure(debug: bool) -> None:
     global _debug_enabled
     _debug_enabled = debug
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    logger.addHandler(handler)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logger.addHandler(handler)
     logger.setLevel(logging.DEBUG if debug else logging.WARNING)
+
+
+def reset() -> None:
+    global _debug_enabled
+    _debug_enabled = False
+    logger.setLevel(logging.WARNING)
 
 
 def is_debug() -> bool:

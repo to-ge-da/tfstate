@@ -2,14 +2,17 @@ import pytest
 from pathlib import Path
 from tfstate.parser import parse_state_file
 from tfstate.models import State
+from tfstate import debug
 from tfstate.output import configure as configure_output
 
 
 @pytest.fixture(autouse=True)
 def reset_output_format():
     configure_output("rich")
+    debug.reset()
     yield
     configure_output("rich")
+    debug.reset()
 
 
 @pytest.fixture

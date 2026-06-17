@@ -33,6 +33,7 @@ def list_resources(
         print_list(state, resource_type=type, module=module, show_all_types=show_all_types)
     except Exception as e:
         debug.exit_with_traceback(e)
+        return
 
 
 if __name__ == "__main__":

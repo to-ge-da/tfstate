@@ -31,6 +31,7 @@ def show(state_file: Optional[Path] = None) -> None:
         backend_type = backend
     except Exception as e:
         debug.exit_with_traceback(e)
+        return
 
     print_show(state, source, backend_type=backend_type)
 

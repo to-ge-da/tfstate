@@ -439,6 +439,16 @@ def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -
         console.print(rm_output.strip())
 
 
+def print_clear() -> None:
+    fmt = get_format()
+    if fmt == "json":
+        print(json.dumps({"status": "cleared"}))
+    elif fmt == "plain":
+        print("Session cache cleared.")
+    else:
+        console.print("[green]Session cache cleared.[/green]")
+
+
 def print_mv(src: str, dst: str, backup_path: str, new_state: State, mv_output: str) -> None:
     fmt = get_format()
     if fmt == "json":
