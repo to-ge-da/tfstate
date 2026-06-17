@@ -18,11 +18,17 @@ from tfstate.output import print_rm, console
 
 def rm(
     address: str = typer.Argument(..., help="Resource address to remove"),
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    force: bool = typer.Option(False, "--force", hidden=True, help="Deprecated: use --yes"),
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
     debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
 ) -> None:
+    if force:
+        if not yes:
+            console.print("[yellow]Warning: --force is deprecated, use --yes instead[/yellow]")
+        yes = True
+
     try:
         state = require_state()
         workspace = require_terraform_mode()
@@ -45,7 +51,7 @@ def rm(
         typer.echo(f"Error: Resource not found in state: {address}", err=True)
         raise typer.Exit(1)
 
-    if not force:
+    if not yes:
         if not typer.confirm(f"Are you sure you want to remove {address} from state?"):
             console.print("[yellow]Operation cancelled.[/yellow]")
             raise typer.Exit(0)
