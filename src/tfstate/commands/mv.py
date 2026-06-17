@@ -17,12 +17,12 @@ from tfstate.output import print_mv, console, resolve_yes
 
 
 def mv(
-    src: str = typer.Argument(..., help="Source resource address"),
-    dst: str = typer.Argument(..., help="Destination resource address"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    force: bool = typer.Option(False, "--force", hidden=True, help="Deprecated: use --yes"),
-    backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
-    debug: bool = typer.Option(False, "--debug", help="Show full stack traces"),
+    src: str,
+    dst: str,
+    yes: bool = False,
+    force: bool = False,
+    backup: Optional[str] = None,
+    debug: bool = False,
 ) -> None:
     yes = resolve_yes(yes, force)
 

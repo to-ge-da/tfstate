@@ -9,8 +9,8 @@ from tfstate.session import load_session
 
 def list_resources(
     state_file: Optional[Path] = None,
-    type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
-    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    type: Optional[str] = None,
+    module: Optional[str] = None,
     show_all_types: bool = False,
 ) -> None:
     try:
