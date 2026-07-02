@@ -61,10 +61,6 @@ uv run ruff check src/ tests/
 
 ## Cursor Cloud specific instructions
 
-- `tfstate` is a CLI-only tool — there is no server, web UI, or long-running process to start. "Running the app" means invoking `uv run tfstate <command>`.
-- `uv` is installed at `~/.local/bin` and is on `PATH` in login shells. Dependencies are refreshed by the startup update script (`uv sync`).
-- **Offline mode works out of the box.** Read-only commands operate on local JSON state files, e.g. `uv run tfstate show tests/fixtures/basic.json` and `uv run tfstate list tests/fixtures/basic.json`. Use `tests/fixtures/basic.json` as a ready-made sample state.
-- **Connected/terraform mode is available.** The `terraform` binary is installed via [`mise`](https://mise.jdx.dev/) (global config in `~/.config/mise/config.toml`) and exposed on `PATH` through the mise shims dir (added in `~/.bashrc`, so use a login shell / `bash -lc`). `init --terraform`, `mv`, and `rm` shell out to `terraform state ...` and work with a **local** state file — no AWS/S3 needed (the state is copied into a temp workspace with a local backend). Without terraform mode, write commands fail fast with "State manipulation requires terraform mode"; that message means terraform mode wasn't enabled, not that the binary is missing.
-  - If `terraform` is ever missing (e.g. snapshot didn't persist), reinstall with: `curl -fsSL https://mise.run | sh` then `mise use -g terraform@latest`.
-  - `terraform state pull` validates the state, so it rejects malformed states. The repo's `tests/fixtures/basic.json` is a read-only test fixture and is **not** terraform-valid (multi-instance resource without `index_key`, malformed output); craft a proper state for terraform-mode `mv`/`rm` testing.
-- Session state is cached under `~/.tfstate/` after `tfstate init`. Run `uv run tfstate clear` to reset it between local runs.
+`tfstate` is a CLI-only tool (no server/web UI); "running the app" means `uv run tfstate <command>`. Tooling (`uv`, `terraform`, `gh`, `awscli`) is managed by [`mise`](https://mise.jdx.dev/) via the repo's [`mise.toml`](mise.toml), and dependencies are refreshed on startup by `mise install` + `uv sync`.
+
+For full environment setup, connected/terraform mode, and known gotchas, see **[`docs/cursor-cloud-setup.md`](docs/cursor-cloud-setup.md)**.
