@@ -58,3 +58,11 @@ uv run pytest
 # Run linting
 uv run ruff check src/ tests/
 ```
+
+## Cursor Cloud specific instructions
+
+- `tfstate` is a CLI-only tool — there is no server, web UI, or long-running process to start. "Running the app" means invoking `uv run tfstate <command>`.
+- `uv` is installed at `~/.local/bin` and is on `PATH` in login shells. Dependencies are refreshed by the startup update script (`uv sync`).
+- **Offline mode works out of the box.** Read-only commands operate on local JSON state files, e.g. `uv run tfstate show tests/fixtures/basic.json` and `uv run tfstate list tests/fixtures/basic.json`. Use `tests/fixtures/basic.json` as a ready-made sample state.
+- **Connected/terraform mode is not available by default.** `init --terraform`, `mv`, and `rm` require the `terraform` binary (not installed) plus AWS credentials/S3 access. Without terraform mode these write commands fail fast with "State manipulation requires terraform mode"; this is expected, not a setup bug.
+- Session state is cached under `~/.tfstate/` after `tfstate init`. Run `uv run tfstate clear` to reset it between local runs.
