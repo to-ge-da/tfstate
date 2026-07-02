@@ -1,0 +1,5 @@
+[tools]
+uv = "latest"
+terraform = "latest"
+gh = "latest"
+awscli = "latest"

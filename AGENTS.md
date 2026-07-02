@@ -58,3 +58,9 @@ uv run pytest
 # Run linting
 uv run ruff check src/ tests/
 ```
+
+## Cursor Cloud specific instructions
+
+`tfstate` is a CLI-only tool (no server/web UI); "running the app" means `uv run tfstate <command>`. Tooling (`uv`, `terraform`, `gh`, `awscli`) is managed by [`mise`](https://mise.jdx.dev/) via the repo's [`mise.toml`](mise.toml), and dependencies are refreshed on startup by `mise install` + `uv sync`.
+
+For full environment setup, connected/terraform mode, and known gotchas, see **[`docs/cursor-cloud-setup.md`](docs/cursor-cloud-setup.md)**.
