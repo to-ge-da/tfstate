@@ -308,3 +308,29 @@ class TestTerraformInitPassesCacheEnv:
         expected_cache = tmp_path / "tfstate" / "terraform-plugin-cache"
         assert captured["cmd"] == ["terraform", "init"]
         assert captured["env"]["TF_PLUGIN_CACHE_DIR"] == str(expected_cache)
+
+    def test_surfaces_terraform_output_on_debug(self, tmp_path: Path, monkeypatch, caplog):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+
+        def fake_run(cmd, *args, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="- Installing hashicorp/null v3.3.0...", stderr=""
+            )
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+
+        src = tmp_path / "state.json"
+        src.write_text("{}")
+        ws = tmp_path / "ws"
+        ws.mkdir()
+
+        debug.configure(True)
+        try:
+            with caplog.at_level("DEBUG", logger="tfstate"):
+                init_local_terraform_backend(src, str(ws))
+        finally:
+            debug.reset()
+
+        assert "terraform init output" in caplog.text
+        assert "Installing hashicorp/null" in caplog.text
