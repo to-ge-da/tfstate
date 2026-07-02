@@ -1,5 +1,6 @@
 import typer
 import boto3
+import os
 import shutil
 import subprocess
 import tempfile
@@ -93,6 +94,29 @@ def generate_backend_tf(
     return "\n".join(lines) + "\n"
 
 
+def build_terraform_env(profile: Optional[str] = None) -> dict:
+    env = os.environ.copy()
+
+    existing = env.get("TF_PLUGIN_CACHE_DIR")
+    if existing:
+        cache_dir = Path(existing)
+        debug.logger.debug(
+            "TF_PLUGIN_CACHE_DIR inherited from environment: %s", cache_dir
+        )
+    else:
+        cache_root = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+        cache_dir = Path(cache_root) / "tfstate" / "terraform-plugin-cache"
+        env["TF_PLUGIN_CACHE_DIR"] = str(cache_dir)
+        debug.logger.debug("TF_PLUGIN_CACHE_DIR not set — defaulting to %s", cache_dir)
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if profile:
+        env["AWS_PROFILE"] = profile
+
+    return env
+
+
 def init_terraform_backend(
     s3_uri: str, profile: Optional[str], region: Optional[str], workspace: Optional[str] = None
 ) -> tuple[str, dict]:
@@ -103,9 +127,7 @@ def init_terraform_backend(
     backend_tf_path = Path(workspace_path) / "backend.tf"
     backend_tf_path.write_text(generate_backend_tf(bucket, key, region, profile))
 
-    env = None
-    if profile:
-        env = {"AWS_PROFILE": profile}
+    env = build_terraform_env(profile)
 
     with Status("Initializing Terraform backend...", console=console):
         result = subprocess.run(
@@ -118,6 +140,9 @@ def init_terraform_backend(
 
     if result.returncode != 0:
         raise RuntimeError(f"terraform init failed:\n{result.stderr}")
+
+    if debug.is_debug() and result.stdout:
+        debug.logger.debug("terraform init output:\n%s", result.stdout.strip())
 
     backend_config = {
         "bucket": bucket,
@@ -133,16 +158,22 @@ def init_local_terraform_backend(local_path: Path, workspace: str) -> tuple[str,
     workspace_path = Path(workspace)
     shutil.copy2(local_path, workspace_path / "terraform.tfstate")
 
+    env = build_terraform_env()
+
     with Status("Initializing Terraform backend...", console=console):
         result = subprocess.run(
             ["terraform", "init"],
             cwd=workspace,
             capture_output=True,
             text=True,
+            env=env,
         )
 
     if result.returncode != 0:
         raise RuntimeError(f"terraform init failed:\n{result.stderr}")
+
+    if debug.is_debug() and result.stdout:
+        debug.logger.debug("terraform init output:\n%s", result.stdout.strip())
 
     backend_config = {
         "backend": "local",
