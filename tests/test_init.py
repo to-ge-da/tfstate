@@ -1,6 +1,10 @@
+import subprocess
 import pytest
 from pathlib import Path
 from typer.testing import CliRunner
+
+from tfstate.commands import init as init_module
+from tfstate.commands.init import init_terraform_backend, init_local_terraform_backend
 
 from tfstate.commands.init import (
     is_s3_uri,
@@ -8,7 +12,9 @@ from tfstate.commands.init import (
     generate_backend_tf,
     check_terraform_installed,
     resolve_workspace,
+    build_terraform_env,
 )
+from tfstate import debug
 from tfstate.cli import app
 
 
@@ -174,3 +180,157 @@ class TestTerraformBackend:
     def test_check_terraform_installed(self):
         result = check_terraform_installed()
         assert isinstance(result, bool)
+
+
+class TestBuildTerraformEnv:
+    def test_defaults_cache_dir_when_unset(self, tmp_path: Path, monkeypatch):
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+        env = build_terraform_env()
+
+        expected = tmp_path / "tfstate" / "terraform-plugin-cache"
+        assert env["TF_PLUGIN_CACHE_DIR"] == str(expected)
+        assert expected.is_dir()
+
+    def test_defaults_to_home_cache_without_xdg(self, tmp_path: Path, monkeypatch):
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+        env = build_terraform_env()
+
+        expected = tmp_path / ".cache" / "tfstate" / "terraform-plugin-cache"
+        assert env["TF_PLUGIN_CACHE_DIR"] == str(expected)
+        assert expected.is_dir()
+
+    def test_respects_existing_cache_dir(self, tmp_path: Path, monkeypatch):
+        custom = tmp_path / "custom-cache"
+        monkeypatch.setenv("TF_PLUGIN_CACHE_DIR", str(custom))
+
+        env = build_terraform_env()
+
+        assert env["TF_PLUGIN_CACHE_DIR"] == str(custom)
+        assert custom.is_dir()
+
+    def test_preserves_inherited_env(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.setenv("SOME_INHERITED_VAR", "keepme")
+
+        env = build_terraform_env()
+
+        assert env["SOME_INHERITED_VAR"] == "keepme"
+
+    def test_sets_aws_profile_when_given(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+        env = build_terraform_env(profile="my-profile")
+
+        assert env["AWS_PROFILE"] == "my-profile"
+
+    def test_no_aws_profile_when_absent(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.delenv("AWS_PROFILE", raising=False)
+
+        env = build_terraform_env()
+
+        assert "AWS_PROFILE" not in env
+
+    def test_debug_log_when_defaulting(self, tmp_path: Path, monkeypatch, caplog):
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        debug.configure(True)
+        try:
+            with caplog.at_level("DEBUG", logger="tfstate"):
+                build_terraform_env()
+        finally:
+            debug.reset()
+
+        assert "defaulting to" in caplog.text
+
+    def test_debug_log_when_inherited(self, tmp_path: Path, monkeypatch, caplog):
+        custom = tmp_path / "inherited"
+        monkeypatch.setenv("TF_PLUGIN_CACHE_DIR", str(custom))
+        debug.configure(True)
+        try:
+            with caplog.at_level("DEBUG", logger="tfstate"):
+                build_terraform_env()
+        finally:
+            debug.reset()
+
+        assert "inherited from environment" in caplog.text
+
+
+class TestTerraformInitPassesCacheEnv:
+    """Both terraform init call sites must pass TF_PLUGIN_CACHE_DIR to the subprocess."""
+
+    def _capture_env(self, monkeypatch):
+        captured = {}
+
+        def fake_run(cmd, *args, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+        return captured
+
+    def test_s3_backend_passes_cache_and_profile(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+        captured = self._capture_env(monkeypatch)
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        init_terraform_backend(
+            "s3://bucket/prod/terraform.tfstate",
+            profile="my-profile",
+            region="us-east-1",
+            workspace=str(ws),
+        )
+
+        expected_cache = tmp_path / "tfstate" / "terraform-plugin-cache"
+        assert captured["cmd"] == ["terraform", "init"]
+        assert captured["env"]["TF_PLUGIN_CACHE_DIR"] == str(expected_cache)
+        assert captured["env"]["AWS_PROFILE"] == "my-profile"
+
+    def test_local_backend_passes_cache(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+        captured = self._capture_env(monkeypatch)
+
+        src = tmp_path / "state.json"
+        src.write_text("{}")
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        init_local_terraform_backend(src, str(ws))
+
+        expected_cache = tmp_path / "tfstate" / "terraform-plugin-cache"
+        assert captured["cmd"] == ["terraform", "init"]
+        assert captured["env"]["TF_PLUGIN_CACHE_DIR"] == str(expected_cache)
+
+    def test_surfaces_terraform_output_on_debug(self, tmp_path: Path, monkeypatch, caplog):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+
+        def fake_run(cmd, *args, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="- Installing hashicorp/null v3.3.0...", stderr=""
+            )
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+
+        src = tmp_path / "state.json"
+        src.write_text("{}")
+        ws = tmp_path / "ws"
+        ws.mkdir()
+
+        debug.configure(True)
+        try:
+            with caplog.at_level("DEBUG", logger="tfstate"):
+                init_local_terraform_backend(src, str(ws))
+        finally:
+            debug.reset()
+
+        assert "terraform init output" in caplog.text
+        assert "Installing hashicorp/null" in caplog.text

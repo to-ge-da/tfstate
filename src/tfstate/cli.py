@@ -35,7 +35,11 @@ def init(
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
     terraform: Annotated[
-        bool, typer.Option("--terraform", help="Initialize real Terraform backend")
+        bool,
+        typer.Option(
+            "--terraform",
+            help="Initialize real Terraform backend (shares providers via TF_PLUGIN_CACHE_DIR)",
+        ),
     ] = False,
     output: Annotated[
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
