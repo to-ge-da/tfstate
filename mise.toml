@@ -3,3 +3,6 @@ uv = "latest"
 terraform = "latest"
 gh = "latest"
 awscli = "latest"
+
+[settings]
+auto_install = false
