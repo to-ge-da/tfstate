@@ -1,0 +1,19 @@
+---
+description: Cloud environment setup for tfstate. Apply when creating or updating the Cursor Cloud agent environment.
+alwaysApply: false
+---
+
+# Cloud Agent Environment Setup
+
+Manage all tooling for this project through `mise`. Do not install tools individually.
+
+## Setup
+
+1. Check whether `mise` is installed; if not, install `mise` first.
+2. Activate `mise` so its tools are on `PATH` — add `eval "$(mise activate bash)"` to `~/.bashrc`.
+3. Trust the project config: `mise trust` (from repo root).
+4. Install the required tools with `mise install` (each pinned to `latest` in `mise.toml`):
+   - `uv`
+   - `terraform`
+   - `awscli`
+5. Install Python dependencies: `uv sync`
