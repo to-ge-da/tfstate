@@ -5,8 +5,7 @@ alwaysApply: false
 
 # Cloud Agent Environment Setup
 
-Manage all tooling for this project through `mise`. Do not install tools
-individually.
+Manage all tooling for this project through `mise`. Do not install tools individually.
 
 ## Setup
 
