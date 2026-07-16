@@ -31,6 +31,7 @@ Use conventional prefixes for branch names and commit messages:
 - Never commit to `main`
 - Never force-push
 - Never commit secrets
+- Always delete the feature branch after merging the PR
 - Use `git` for version control, `gh` for GitHub operations (issues, PRs, merge)
 
 ### Code style
