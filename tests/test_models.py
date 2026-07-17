@@ -59,6 +59,11 @@ class TestGetResource:
         assert resource.type == "aws_subnet"
         assert idx == 0
 
+    def test_multi_instance_resource_requires_index(self, basic_state):
+        result = basic_state.get_resource("module.vpc.aws_subnet.public")
+
+        assert result is None
+
     def test_get_nonexistent_resource(self, basic_state):
         result = basic_state.get_resource("nonexistent.resource")
         assert result is None

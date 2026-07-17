@@ -2,6 +2,7 @@ import json
 from enum import Enum
 from rich.console import Console
 from typing import Optional
+from tfstate.attrs import format_attr_path, format_attr_value, walk_attributes
 from tfstate.models import State
 
 
@@ -348,32 +349,35 @@ def _print_list_no_match_plain(
 def print_get(state: State, address: str) -> None:
     result = state.get_resource(address)
     if not result:
-        console.print(f"[red]Resource not found: {address}[/red]")
-        return
+        raise ValueError(f"Resource not found: {address}")
 
     resource, idx = result
     instance = resource.instances[idx]
     dependents = find_dependents(state, address)
+    full_address = resource.full_address(idx)
+    attributes = [
+        (format_attr_path(path), value) for path, value in walk_attributes(instance.attributes)
+    ]
 
     fmt = get_format()
     if fmt == "json":
         data = {
-            "address": resource.address,
+            "address": full_address,
             "type": resource.type,
             "provider": resource.provider,
-            "attributes": dict(sorted(instance.attributes.items())),
+            "attributes": instance.attributes,
             "dependencies": instance.dependencies,
             "dependents": dependents,
         }
         print(json.dumps(data, indent=2, default=str))
         return
     if fmt == "plain":
-        print(f"Resource: {resource.address}")
+        print(f"Resource: {full_address}")
         print(f"Type: {resource.type}")
         print(f"Provider: {resource.provider}")
         print("\nAttributes:")
-        for key, value in sorted(instance.attributes.items()):
-            print(f"  {key:<30} = {value}")
+        for key, value in attributes:
+            print(f"  {key:<30} = {format_attr_value(value)}")
         if instance.dependencies:
             print("\nDependencies:")
             for dep in instance.dependencies:
@@ -384,13 +388,13 @@ def print_get(state: State, address: str) -> None:
                 print(f"  - {dep}")
         return
 
-    console.print(f"\n[bold]Resource:[/bold] {resource.address}")
+    console.print(f"\n[bold]Resource:[/bold] {full_address}")
     console.print(f"[bold]Type:[/bold] {resource.type}")
     console.print(f"[bold]Provider:[/bold] {resource.provider}")
 
     console.print("\n[bold]Attributes:[/bold]")
-    for key, value in sorted(instance.attributes.items()):
-        console.print(f"  {key:<30} = {value}")
+    for key, value in attributes:
+        console.print(f"  {key:<30} = {format_attr_value(value)}")
 
     if instance.dependencies:
         console.print("\n[bold]Dependencies:[/bold]")
@@ -406,9 +410,9 @@ def print_get(state: State, address: str) -> None:
 def find_dependents(state: State, address: str) -> list[str]:
     dependents = []
     for resource in state.resources:
-        for instance in resource.instances:
+        for index, instance in enumerate(resource.instances):
             if address in instance.dependencies:
-                dependents.append(resource.address)
+                dependents.append(resource.full_address(index))
     return dependents
 
 

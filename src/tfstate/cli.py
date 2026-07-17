@@ -5,6 +5,7 @@ from typing import Optional, Annotated
 from tfstate import debug as debug_module
 from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
+from tfstate.commands.get import get as get_cmd
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
@@ -69,6 +70,18 @@ def list_cmd(
     ] = False,
 ) -> None:
     list_resources(state_file, type=type, module=module, show_all_types=show_all_types)
+
+
+@app.command("get")
+def get(
+    target: str = typer.Argument(
+        ..., help="Resource address, or state file when ADDRESS is also provided"
+    ),
+    address: Optional[str] = typer.Argument(
+        None, help="Resource address when reading an offline state file"
+    ),
+) -> None:
+    get_cmd(target, address)
 
 
 @app.command("pull")
