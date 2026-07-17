@@ -416,6 +416,25 @@ def find_dependents(state: State, address: str) -> list[str]:
     return dependents
 
 
+def print_query(addresses: list[str]) -> None:
+    fmt = get_format()
+    if fmt == "json":
+        print(json.dumps(addresses, indent=2))
+        return
+    if not addresses:
+        message = "No resources matched the query."
+        if fmt == "plain":
+            print(message)
+        else:
+            console.print(f"[yellow]{message}[/yellow]")
+        return
+    for address in addresses:
+        if fmt == "plain":
+            print(address)
+        else:
+            console.print(address)
+
+
 def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -> None:
     remaining = len(new_state.resources)
     fmt = get_format()

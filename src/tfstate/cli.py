@@ -6,6 +6,7 @@ from tfstate import debug as debug_module
 from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
 from tfstate.commands.get import get as get_cmd
+from tfstate.commands.query import query as query_cmd
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
@@ -82,6 +83,33 @@ def get(
     ),
 ) -> None:
     get_cmd(target, address)
+
+
+@app.command("query")
+def query(
+    state_file: Optional[Path] = typer.Argument(
+        None, help="State file (omit to use initialized state)"
+    ),
+    type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
+    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    attr: Optional[list[str]] = typer.Option(
+        None, "--attr", help="Filter by attribute KEY=VALUE; repeat for AND"
+    ),
+    has_attr: Optional[list[str]] = typer.Option(
+        None, "--has-attr", help="Require an attribute path; repeat for AND"
+    ),
+    missing_attr: Optional[list[str]] = typer.Option(
+        None, "--missing-attr", help="Require a missing attribute path; repeat for AND"
+    ),
+) -> None:
+    query_cmd(
+        state_file,
+        type=type,
+        module=module,
+        attrs=attr,
+        has_attrs=has_attr,
+        missing_attrs=missing_attr,
+    )
 
 
 @app.command("pull")
