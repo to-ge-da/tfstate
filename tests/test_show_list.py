@@ -178,6 +178,26 @@ class TestListCommand:
 
 
 class TestShowListHelp:
+    def test_root_help_describes_all_commands(self):
+        result = runner.invoke(app, ["--help"])
+
+        assert result.exit_code == 0
+        descriptions = {
+            "init": "Initialize state from a local file or S3 backend.",
+            "show": "Show state metadata and resource summary.",
+            "list": "List resources in state.",
+            "get": "Show detailed information about a resource.",
+            "query": "Find resources matching filters.",
+            "diff": "Compare two state files.",
+            "pull": "Download state from S3.",
+            "mv": "Move a resource to a new address.",
+            "rm": "Remove a resource from connected state.",
+            "clear": "Clear cached session state",
+        }
+        for command, description in descriptions.items():
+            assert command in result.stdout
+            assert description in result.stdout
+
     def test_show_help(self):
         result = runner.invoke(app, ["show", "--help"])
         assert result.exit_code == 0

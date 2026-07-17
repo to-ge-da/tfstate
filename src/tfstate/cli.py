@@ -48,6 +48,7 @@ def init(
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
     ] = None,
 ) -> None:
+    """Initialize state from a local file or S3 backend."""
     init_cmd(state_path, profile=profile, region=region, terraform=terraform, output=output)
 
 
@@ -57,6 +58,7 @@ def show_cmd(
         None, help="State file (omit to use initialized state)"
     ),
 ) -> None:
+    """Show state metadata and resource summary."""
     show(state_file)
 
 
@@ -71,6 +73,7 @@ def list_cmd(
         bool, typer.Option("--show-all-types", help="Show all available types without truncation")
     ] = False,
 ) -> None:
+    """List resources in state."""
     list_resources(state_file, type=type, module=module, show_all_types=show_all_types)
 
 
@@ -83,6 +86,7 @@ def get(
         None, help="Resource address when reading an offline state file"
     ),
 ) -> None:
+    """Show detailed information about a resource."""
     get_cmd(target, address)
 
 
@@ -103,6 +107,7 @@ def query(
         None, "--missing-attr", help="Require a missing attribute path; repeat for AND"
     ),
 ) -> None:
+    """Find resources matching filters."""
     query_cmd(
         state_file,
         type=type,
@@ -118,6 +123,7 @@ def diff(
     file1: Path = typer.Argument(..., help="Original Terraform state file"),
     file2: Path = typer.Argument(..., help="Updated Terraform state file"),
 ) -> None:
+    """Compare two state files."""
     diff_cmd(file1, file2)
 
 
@@ -130,6 +136,7 @@ def pull_cmd(
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
 ) -> None:
+    """Download state from S3."""
     pull(s3_uri, output=output, profile=profile, region=region)
 
 
@@ -143,6 +150,7 @@ def mv(
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
 ) -> None:
+    """Move a resource to a new address."""
     mv_cmd(src, dst, yes=yes, force=force, backup=backup)
 
 
@@ -156,6 +164,7 @@ def rm(
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
 ) -> None:
+    """Remove a resource from connected state."""
     rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
 
 
