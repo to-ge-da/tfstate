@@ -9,7 +9,7 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 ## Features
 
 - **State Inspection** — View state metadata, list resources, query by type/module/attributes
-- **Dependency Analysis** — Visualize resource dependency graphs
+- **Dependency Analysis** — Inspect resource dependencies and dependents
 - **State Diff** — Compare state files across versions
 - **State Manipulation** — Remove, filter, and move resources within state files
 - **Offline Analysis** — Work with pulled state JSON files directly
@@ -44,6 +44,9 @@ tfstate query state.json --type aws_instance
 
 # Get detailed resource info
 tfstate get state.json aws_vpc.main
+
+# Compare state snapshots
+tfstate diff old.json new.json
 ```
 
 ## Documentation

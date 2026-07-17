@@ -466,10 +466,10 @@ tfstate/
 
 - [ ] `init` command — connect to real backend, store context
 - [ ] Refactor `show` and `list` — work against both offline JSON and connected state
-- [ ] `get` command — detailed resource view
-- [ ] `query` command with filters
+- [x] `get` command — detailed resource view
+- [x] `query` command with filters
 - [ ] `graph` command (tree output)
-- [ ] `diff` command
+- [x] `diff` command
 - [ ] Output format options (json, plain)
 - [ ] `--debug` flag
 
