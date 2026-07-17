@@ -7,6 +7,7 @@ from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
 from tfstate.commands.get import get as get_cmd
 from tfstate.commands.query import query as query_cmd
+from tfstate.commands.diff import diff as diff_cmd
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
@@ -110,6 +111,14 @@ def query(
         has_attrs=has_attr,
         missing_attrs=missing_attr,
     )
+
+
+@app.command("diff")
+def diff(
+    file1: Path = typer.Argument(..., help="Original Terraform state file"),
+    file2: Path = typer.Argument(..., help="Updated Terraform state file"),
+) -> None:
+    diff_cmd(file1, file2)
 
 
 @app.command("pull")

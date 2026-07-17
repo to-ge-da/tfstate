@@ -435,6 +435,115 @@ def print_query(addresses: list[str]) -> None:
             console.print(address)
 
 
+def print_diff(result: dict) -> None:
+    fmt = get_format()
+    if fmt == "json":
+        print(json.dumps(result, indent=2, default=str))
+        return
+
+    _print_metadata_notices(result["metadata"], rich=fmt == "rich")
+    summary = result["summary"]
+    has_differences = any(
+        summary[key]
+        for key in ("resources_added", "resources_removed", "resources_modified")
+    )
+    if not has_differences:
+        if fmt == "plain":
+            print("No differences found")
+        else:
+            console.print("[green]No differences found[/green]")
+        return
+
+    if result["removed"]:
+        _print_diff_heading("Removed Resources:", rich=fmt == "rich")
+        for resource in result["removed"]:
+            _print_diff_line(
+                f"  - {resource['address']} ({resource['type']})",
+                style="red",
+                rich=fmt == "rich",
+            )
+
+    if result["added"]:
+        _print_diff_heading("Added Resources:", rich=fmt == "rich")
+        for resource in result["added"]:
+            _print_diff_line(
+                f"  + {resource['address']} ({resource['type']})",
+                style="green",
+                rich=fmt == "rich",
+            )
+
+    if result["modified"]:
+        _print_diff_heading("Modified Resources:", rich=fmt == "rich")
+        for resource in result["modified"]:
+            _print_diff_line(
+                f"  ~ {resource['address']} ({resource['type']})",
+                style="yellow",
+                rich=fmt == "rich",
+            )
+            for change in resource["changes"]:
+                _print_attribute_change(change, rich=fmt == "rich")
+
+    lines = [
+        f"Attributes changed: {summary['attributes_changed']}",
+        f"Resources added: {summary['resources_added']}",
+        f"Resources removed: {summary['resources_removed']}",
+        f"Resources modified: {summary['resources_modified']}",
+    ]
+    if fmt == "plain":
+        print()
+        for line in lines:
+            print(line)
+    else:
+        console.print()
+        for line in lines:
+            console.print(line)
+
+
+def _print_metadata_notices(metadata: list[dict], rich: bool) -> None:
+    for notice in metadata:
+        line = (
+            f"{notice['field'].capitalize()} differs: "
+            f"{format_attr_value(notice['old'])} -> {format_attr_value(notice['new'])}"
+        )
+        if rich:
+            console.print(line, style="cyan", markup=False)
+        else:
+            print(line)
+    if metadata:
+        console.print() if rich else print()
+
+
+def _print_diff_heading(heading: str, rich: bool) -> None:
+    if rich:
+        console.print(f"[bold]{heading}[/bold]")
+    else:
+        print(heading)
+
+
+def _print_diff_line(line: str, style: str, rich: bool) -> None:
+    if rich:
+        console.print(line, style=style, markup=False)
+    else:
+        print(line)
+
+
+def _print_attribute_change(change: dict, rich: bool) -> None:
+    kind = change["kind"]
+    if kind == "added":
+        line = f"      + {change['path']}: {format_attr_value(change['new'])}"
+        style = "green"
+    elif kind == "removed":
+        line = f"      - {change['path']}: {format_attr_value(change['old'])}"
+        style = "red"
+    else:
+        line = (
+            f"      {change['path']}: {format_attr_value(change['old'])} "
+            f"-> {format_attr_value(change['new'])}"
+        )
+        style = "yellow"
+    _print_diff_line(line, style=style, rich=rich)
+
+
 def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -> None:
     remaining = len(new_state.resources)
     fmt = get_format()
