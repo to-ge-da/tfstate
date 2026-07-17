@@ -20,9 +20,7 @@ def clear_loaded_state():
 
 
 def test_get_offline_rich_flattens_attributes_and_lists_dependents():
-    result = runner.invoke(
-        app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_vpc.main"]
-    )
+    result = runner.invoke(app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_vpc.main"])
 
     assert result.exit_code == 0
     assert "module.vpc.aws_vpc.main" in result.stdout
@@ -84,9 +82,7 @@ def test_get_plain_indexed_address():
 
 
 def test_get_rejects_ambiguous_base_address():
-    result = runner.invoke(
-        app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_subnet.public"]
-    )
+    result = runner.invoke(app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_subnet.public"])
 
     assert result.exit_code == 1
     assert "ambiguous" in result.output
@@ -95,9 +91,7 @@ def test_get_rejects_ambiguous_base_address():
 
 
 def test_get_unknown_address_suggests_match():
-    result = runner.invoke(
-        app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_vpc.mai"]
-    )
+    result = runner.invoke(app, ["get", str(BASIC_FIXTURE), "module.vpc.aws_vpc.mai"])
 
     assert result.exit_code == 1
     assert "Resource not found" in result.output

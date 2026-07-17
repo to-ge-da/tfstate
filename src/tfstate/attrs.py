@@ -53,11 +53,7 @@ def get_attr(attributes: Any, path: str) -> Any:
     for part in parse_attr_path(path):
         if isinstance(part, str) and isinstance(current, dict) and part in current:
             current = current[part]
-        elif (
-            isinstance(part, int)
-            and isinstance(current, list)
-            and 0 <= part < len(current)
-        ):
+        elif isinstance(part, int) and isinstance(current, list) and 0 <= part < len(current):
             current = current[part]
         else:
             return _MISSING

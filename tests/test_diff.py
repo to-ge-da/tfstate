@@ -49,12 +49,8 @@ def test_diff_json_has_stable_schema_and_metadata_notices():
     assert result.exit_code == 0
     data = json.loads(result.stdout)
     assert [notice["field"] for notice in data["metadata"]] == ["serial", "lineage"]
-    assert data["removed"] == [
-        {"address": "aws_instance.bastion", "type": "aws_instance"}
-    ]
-    assert data["added"] == [
-        {"address": "aws_s3_bucket.logs", "type": "aws_s3_bucket"}
-    ]
+    assert data["removed"] == [{"address": "aws_instance.bastion", "type": "aws_instance"}]
+    assert data["added"] == [{"address": "aws_s3_bucket.logs", "type": "aws_s3_bucket"}]
     modified = data["modified"][0]
     assert modified["address"] == "module.vpc.aws_vpc.main"
     assert {change["kind"] for change in modified["changes"]} == {
@@ -163,9 +159,7 @@ def test_diff_metadata_only_still_reports_no_resource_differences(tmp_path):
 
 
 def test_diff_missing_file_fails():
-    result = runner.invoke(
-        app, ["diff", str(BASIC_FIXTURE), "/missing-state.json"]
-    )
+    result = runner.invoke(app, ["diff", str(BASIC_FIXTURE), "/missing-state.json"])
 
     assert result.exit_code == 1
     assert "Error" in result.output

@@ -142,9 +142,7 @@ def test_query_list_index_path(typed_fixture):
 
 
 def test_query_no_match_contracts():
-    rich = runner.invoke(
-        app, ["query", str(BASIC_FIXTURE), "--type", "nonexistent"]
-    )
+    rich = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--type", "nonexistent"])
     plain = runner.invoke(
         app,
         ["--format", "plain", "query", str(BASIC_FIXTURE), "--type", "nonexistent"],
@@ -162,18 +160,14 @@ def test_query_no_match_contracts():
 
 @pytest.mark.parametrize("expression", ["invalid", "=value", "tags."])
 def test_query_rejects_malformed_attr_filter(expression):
-    result = runner.invoke(
-        app, ["query", str(BASIC_FIXTURE), "--attr", expression]
-    )
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--attr", expression])
 
     assert result.exit_code == 2
     assert "--attr" in result.output
 
 
 def test_query_rejects_invalid_presence_path():
-    result = runner.invoke(
-        app, ["query", str(BASIC_FIXTURE), "--has-attr", "rules[x]"]
-    )
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--has-attr", "rules[x]"])
 
     assert result.exit_code == 2
     assert "--has-attr" in result.output

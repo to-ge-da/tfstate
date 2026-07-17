@@ -45,7 +45,9 @@ def get(target: str, address: Optional[str] = None) -> None:
 
     if state.get_resource(resource_address) is None:
         typer.echo(f"Error: Resource not found: {resource_address}", err=True)
-        suggestions = get_close_matches(resource_address, _resource_addresses(state), n=3, cutoff=0.6)
+        suggestions = get_close_matches(
+            resource_address, _resource_addresses(state), n=3, cutoff=0.6
+        )
         if suggestions:
             typer.echo("Did you mean:", err=True)
             for suggestion in suggestions:

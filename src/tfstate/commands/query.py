@@ -59,9 +59,7 @@ def query(
 
 def _parse_attr_filter(expression: str) -> tuple[str, Any]:
     if "=" not in expression:
-        raise typer.BadParameter(
-            f"expected KEY=VALUE, got {expression!r}", param_hint="--attr"
-        )
+        raise typer.BadParameter(f"expected KEY=VALUE, got {expression!r}", param_hint="--attr")
     path, raw_value = expression.split("=", 1)
     if not path:
         raise typer.BadParameter("attribute key cannot be empty", param_hint="--attr")

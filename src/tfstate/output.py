@@ -112,7 +112,9 @@ def print_init(
             console.print(f"  - {name}")
 
 
-def print_show(state: State, file_path: str = "unknown", backend_type: Optional[str] = None) -> None:
+def print_show(
+    state: State, file_path: str = "unknown", backend_type: Optional[str] = None
+) -> None:
     fmt = get_format()
     if fmt == "json":
         data = _show_data(state, file_path, backend_type)
@@ -163,12 +165,11 @@ def _show_data(state: State, file_path: str, backend_type: Optional[str] = None)
             "total": sum(len(r) for r in by_type.values()),
             "by_type": {t: len(r) for t, r in sorted(by_type.items())},
         },
-        "modules": {
-            (m or "root"): len(r) for m, r in sorted(by_module.items())
-        } if len(by_module) > 1 or "" not in by_module else {},
+        "modules": {(m or "root"): len(r) for m, r in sorted(by_module.items())}
+        if len(by_module) > 1 or "" not in by_module
+        else {},
         "outputs": {
-            name: {"sensitive": out.sensitive}
-            for name, out in sorted(state.outputs.items())
+            name: {"sensitive": out.sensitive} for name, out in sorted(state.outputs.items())
         },
     }
 
@@ -444,8 +445,7 @@ def print_diff(result: dict) -> None:
     _print_metadata_notices(result["metadata"], rich=fmt == "rich")
     summary = result["summary"]
     has_differences = any(
-        summary[key]
-        for key in ("resources_added", "resources_removed", "resources_modified")
+        summary[key] for key in ("resources_added", "resources_removed", "resources_modified")
     )
     if not has_differences:
         if fmt == "plain":
