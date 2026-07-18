@@ -74,7 +74,7 @@ respects it and does not override it.
 Use `--debug` to see whether the cache is applied:
 
 ```
-$ tfstate --debug init s3://my-bucket/prod/terraform.tfstate --terraform
+$ tfstate init s3://my-bucket/prod/terraform.tfstate --terraform --debug
 DEBUG: TF_PLUGIN_CACHE_DIR not set — defaulting to /home/user/.cache/tfstate/terraform-plugin-cache
 ```
 

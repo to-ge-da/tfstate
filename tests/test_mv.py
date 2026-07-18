@@ -66,9 +66,7 @@ class TestMvErrors:
     def test_mv_without_terraform_mode(self, tmp_path):
         state = parse_state_file(BASIC_FIXTURE)
         set_state(state, str(BASIC_FIXTURE), "local")
-        result = runner.invoke(
-            app, ["mv", "module.vpc.aws_vpc.main", "module.vpc.aws_vpc.moved"]
-        )
+        result = runner.invoke(app, ["mv", "module.vpc.aws_vpc.main", "module.vpc.aws_vpc.moved"])
         assert result.exit_code == 1
         assert "terraform mode" in result.output
 
@@ -207,7 +205,7 @@ class TestMvSuccess:
         mock_mv = MagicMock(
             returncode=0,
             stdout="Moved module.vpc.aws_vpc.main to module.vpc.aws_vpc.moved.\n"
-                   "Successfully moved 1 resource(s).\n",
+            "Successfully moved 1 resource(s).\n",
             stderr="",
         )
         mock_pull_after = MagicMock(returncode=0, stdout=state_json, stderr="")
@@ -318,11 +316,11 @@ class TestMvDebug:
             result = runner.invoke(
                 app,
                 [
-                    "--debug",
                     "mv",
                     "module.vpc.aws_vpc.main",
                     "module.vpc.aws_vpc.moved",
                     "--yes",
+                    "--debug",
                 ],
             )
 

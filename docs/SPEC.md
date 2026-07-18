@@ -470,8 +470,8 @@ tfstate/
 - [x] `query` command with filters (including interactive bare query)
 - [ ] `graph` command (tree output)
 - [x] `diff` command
-- [x] Output format options (json, plain) — global flag today; command-level placement tracked in #46
-- [x] `--debug` flag — global flag today; command-level placement tracked in #46
+- [x] Output format options (json, plain) — `--format` / `-f` on each command
+- [x] `--debug` flag — on each command
 
 ### Phase 3: State Manipulation (v0.3.0)
 

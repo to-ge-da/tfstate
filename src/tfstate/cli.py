@@ -20,14 +20,13 @@ app = typer.Typer(
     help="A CLI tool for debugging, analyzing, and manipulating Terraform state files",
 )
 
+DebugOption = Annotated[bool, typer.Option("--debug", help="Show full stack traces")]
+FormatOption = Annotated[
+    OutputFormat, typer.Option("--format", "-f", help="Output format: rich, json, plain")
+]
 
-@app.callback()
-def global_options(
-    debug: Annotated[bool, typer.Option("--debug", help="Show full stack traces")] = False,
-    format: Annotated[
-        OutputFormat, typer.Option("--format", "-f", help="Output format: rich, json, plain")
-    ] = OutputFormat.RICH,
-) -> None:
+
+def configure_globals(debug: bool, format: OutputFormat) -> None:
     debug_module.configure(debug)
     configure_output(format.value)
 
@@ -47,8 +46,11 @@ def init(
     output: Annotated[
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
     ] = None,
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Initialize state from a local file or S3 backend."""
+    configure_globals(debug, format)
     init_cmd(state_path, profile=profile, region=region, terraform=terraform, output=output)
 
 
@@ -57,8 +59,11 @@ def show_cmd(
     state_file: Optional[Path] = typer.Argument(
         None, help="State file (omit to use initialized state)"
     ),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Show state metadata and resource summary."""
+    configure_globals(debug, format)
     show(state_file)
 
 
@@ -72,8 +77,11 @@ def list_cmd(
     show_all_types: Annotated[
         bool, typer.Option("--show-all-types", help="Show all available types without truncation")
     ] = False,
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """List resources in state."""
+    configure_globals(debug, format)
     list_resources(state_file, type=type, module=module, show_all_types=show_all_types)
 
 
@@ -85,8 +93,11 @@ def get(
     address: Optional[str] = typer.Argument(
         None, help="Resource address when reading an offline state file"
     ),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Show detailed information about a resource."""
+    configure_globals(debug, format)
     get_cmd(target, address)
 
 
@@ -114,8 +125,11 @@ def query(
             help="Force interactive resource picker (TTY required)",
         ),
     ] = False,
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Explore resources interactively, or filter them non-interactively."""
+    configure_globals(debug, format)
     query_cmd(
         state_file,
         type=type,
@@ -131,8 +145,11 @@ def query(
 def diff(
     file1: Path = typer.Argument(..., help="Original Terraform state file"),
     file2: Path = typer.Argument(..., help="Updated Terraform state file"),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Compare two state files."""
+    configure_globals(debug, format)
     diff_cmd(file1, file2)
 
 
@@ -144,8 +161,11 @@ def pull_cmd(
     ),
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Download state from S3."""
+    configure_globals(debug, format)
     pull(s3_uri, output=output, profile=profile, region=region)
 
 
@@ -158,8 +178,11 @@ def mv(
         bool, typer.Option("--force", hidden=True, help="Deprecated: use --yes")
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Move a resource to a new address."""
+    configure_globals(debug, format)
     mv_cmd(src, dst, yes=yes, force=force, backup=backup)
 
 
@@ -172,14 +195,21 @@ def rm(
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Remove a resource from connected state."""
+    configure_globals(debug, format)
     rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
 
 
 @app.command("clear")
-def clear_cmd() -> None:
+def clear_cmd(
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
+) -> None:
     """Clear cached session state"""
+    configure_globals(debug, format)
     try:
         clear_session()
         print_clear()
