@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 import questionary
 import typer
+from questionary import Style
 
 from tfstate import debug
 from tfstate.attrs import get_attr, is_missing, parse_attr_path
@@ -14,6 +15,20 @@ from tfstate.output import get_format, print_get, print_query
 from tfstate.parser import StateParseError, parse_state_file
 from tfstate.session import load_session
 from tfstate.state_store import require_state
+
+
+_QUERY_PICKER_STYLE = Style(
+    [
+        ("qmark", "fg:#00d7ff bold"),
+        ("question", "bold"),
+        ("answer", "fg:#00d7ff bold"),
+        ("pointer", "fg:#00d7ff bold"),
+        ("highlighted", "fg:#ffffff bg:#005fff bold"),
+        ("selected", "fg:#ffffff bg:#005fff bold"),
+        ("text", "fg:#a8a8a8"),
+        ("instruction", "fg:#808080"),
+    ]
+)
 
 
 def query(
@@ -138,10 +153,11 @@ def _run_interactive(state: State, addresses: list[str]) -> None:
         return
 
     try:
-        selected = questionary.autocomplete(
+        selected = questionary.select(
             "Select a resource:",
             choices=addresses,
-            validate=lambda text: text in addresses or "Choose a resource from the list",
+            pointer="➜",
+            style=_QUERY_PICKER_STYLE,
         ).ask()
     except KeyboardInterrupt:
         raise typer.Exit(130)

@@ -80,10 +80,13 @@ def test_interactive_success_shows_get_output(monkeypatch):
 
     prompt = MagicMock()
     prompt.ask.return_value = "aws_instance.bastion"
-    monkeypatch.setattr(
-        "tfstate.commands.query.questionary.autocomplete",
-        lambda *args, **kwargs: prompt,
-    )
+    seen_kwargs = {}
+
+    def capture_select(*args, **kwargs):
+        seen_kwargs.update(kwargs)
+        return prompt
+
+    monkeypatch.setattr("tfstate.commands.query.questionary.select", capture_select)
 
     result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive"])
 
@@ -91,6 +94,8 @@ def test_interactive_success_shows_get_output(monkeypatch):
     assert "Resource:" in result.stdout
     assert "aws_instance.bastion" in result.stdout
     assert "instance_type" in result.stdout
+    assert seen_kwargs["pointer"] == "➜"
+    assert seen_kwargs["style"] is not None
     prompt.ask.assert_called_once()
 
 
@@ -101,7 +106,7 @@ def test_interactive_cancel_exits_130(monkeypatch):
     prompt = MagicMock()
     prompt.ask.return_value = None
     monkeypatch.setattr(
-        "tfstate.commands.query.questionary.autocomplete",
+        "tfstate.commands.query.questionary.select",
         lambda *args, **kwargs: prompt,
     )
 
@@ -117,7 +122,7 @@ def test_interactive_keyboard_interrupt_exits_130(monkeypatch):
     prompt = MagicMock()
     prompt.ask.side_effect = KeyboardInterrupt
     monkeypatch.setattr(
-        "tfstate.commands.query.questionary.autocomplete",
+        "tfstate.commands.query.questionary.select",
         lambda *args, **kwargs: prompt,
     )
 
@@ -135,10 +140,10 @@ def test_one_candidate_auto_selects_without_prompt(monkeypatch):
     def fail_if_called(*args, **kwargs):
         nonlocal called
         called = True
-        raise AssertionError("autocomplete should not be called for one candidate")
+        raise AssertionError("select should not be called for one candidate")
 
     monkeypatch.setattr(
-        "tfstate.commands.query.questionary.autocomplete",
+        "tfstate.commands.query.questionary.select",
         fail_if_called,
     )
 
@@ -171,16 +176,18 @@ def test_interactive_with_filter_narrows_candidates(monkeypatch):
     monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
 
     seen_choices = []
+    seen_kwargs = {}
 
-    def capture_autocomplete(*args, **kwargs):
+    def capture_select(*args, **kwargs):
         seen_choices.extend(kwargs.get("choices", []))
+        seen_kwargs.update(kwargs)
         prompt = MagicMock()
         prompt.ask.return_value = "module.vpc.aws_vpc.main"
         return prompt
 
     monkeypatch.setattr(
-        "tfstate.commands.query.questionary.autocomplete",
-        capture_autocomplete,
+        "tfstate.commands.query.questionary.select",
+        capture_select,
     )
 
     result = runner.invoke(
@@ -194,6 +201,8 @@ def test_interactive_with_filter_narrows_candidates(monkeypatch):
         "module.vpc.aws_subnet.public[0]",
         "module.vpc.aws_subnet.public[1]",
     ]
+    assert seen_kwargs["pointer"] == "➜"
+    assert seen_kwargs["style"] is not None
     assert "module.vpc.aws_vpc.main" in result.stdout
 
 
