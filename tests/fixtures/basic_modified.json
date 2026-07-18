@@ -1,0 +1,76 @@
+{
+  "version": 4,
+  "terraform_version": "1.6.0",
+  "serial": 43,
+  "lineage": "different-lineage",
+  "outputs": {},
+  "resources": [
+    {
+      "module": "module.vpc",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "vpc-0abc123def456",
+            "cidr_block": "10.1.0.0/16",
+            "tags": {
+              "Name": "production-vpc",
+              "Environment": "prod"
+            }
+          },
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "module": "module.vpc",
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "public",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "subnet-0abc123def456",
+            "vpc_id": "vpc-0abc123def456",
+            "cidr_block": "10.0.1.0/24",
+            "availability_zone": "eu-west-1a"
+          },
+          "dependencies": ["module.vpc.aws_vpc.main"]
+        },
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "subnet-1abc123def456",
+            "vpc_id": "vpc-0abc123def456",
+            "cidr_block": "10.0.2.0/24",
+            "availability_zone": "eu-west-1b"
+          },
+          "dependencies": ["module.vpc.aws_vpc.main"]
+        }
+      ]
+    },
+    {
+      "module": null,
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "production-logs",
+            "bucket": "production-logs"
+          },
+          "dependencies": []
+        }
+      ]
+    }
+  ]
+}

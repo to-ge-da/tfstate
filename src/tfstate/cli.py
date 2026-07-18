@@ -5,6 +5,9 @@ from typing import Optional, Annotated
 from tfstate import debug as debug_module
 from tfstate.commands.show import show
 from tfstate.commands.list import list_resources
+from tfstate.commands.get import get as get_cmd
+from tfstate.commands.query import query as query_cmd
+from tfstate.commands.diff import diff as diff_cmd
 from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
@@ -45,6 +48,7 @@ def init(
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
     ] = None,
 ) -> None:
+    """Initialize state from a local file or S3 backend."""
     init_cmd(state_path, profile=profile, region=region, terraform=terraform, output=output)
 
 
@@ -54,6 +58,7 @@ def show_cmd(
         None, help="State file (omit to use initialized state)"
     ),
 ) -> None:
+    """Show state metadata and resource summary."""
     show(state_file)
 
 
@@ -68,7 +73,67 @@ def list_cmd(
         bool, typer.Option("--show-all-types", help="Show all available types without truncation")
     ] = False,
 ) -> None:
+    """List resources in state."""
     list_resources(state_file, type=type, module=module, show_all_types=show_all_types)
+
+
+@app.command("get")
+def get(
+    target: str = typer.Argument(
+        ..., help="Resource address, or state file when ADDRESS is also provided"
+    ),
+    address: Optional[str] = typer.Argument(
+        None, help="Resource address when reading an offline state file"
+    ),
+) -> None:
+    """Show detailed information about a resource."""
+    get_cmd(target, address)
+
+
+@app.command("query")
+def query(
+    state_file: Optional[Path] = typer.Argument(
+        None, help="State file (omit to use initialized state)"
+    ),
+    type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
+    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    attr: Optional[list[str]] = typer.Option(
+        None, "--attr", help="Filter by attribute KEY=VALUE; repeat for AND"
+    ),
+    has_attr: Optional[list[str]] = typer.Option(
+        None, "--has-attr", help="Require an attribute path; repeat for AND"
+    ),
+    missing_attr: Optional[list[str]] = typer.Option(
+        None, "--missing-attr", help="Require a missing attribute path; repeat for AND"
+    ),
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--interactive",
+            "-i",
+            help="Force interactive resource picker (TTY required)",
+        ),
+    ] = False,
+) -> None:
+    """Explore resources interactively, or filter them non-interactively."""
+    query_cmd(
+        state_file,
+        type=type,
+        module=module,
+        attrs=attr,
+        has_attrs=has_attr,
+        missing_attrs=missing_attr,
+        interactive=interactive,
+    )
+
+
+@app.command("diff")
+def diff(
+    file1: Path = typer.Argument(..., help="Original Terraform state file"),
+    file2: Path = typer.Argument(..., help="Updated Terraform state file"),
+) -> None:
+    """Compare two state files."""
+    diff_cmd(file1, file2)
 
 
 @app.command("pull")
@@ -80,6 +145,7 @@ def pull_cmd(
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="AWS profile"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="AWS region"),
 ) -> None:
+    """Download state from S3."""
     pull(s3_uri, output=output, profile=profile, region=region)
 
 
@@ -93,6 +159,7 @@ def mv(
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
 ) -> None:
+    """Move a resource to a new address."""
     mv_cmd(src, dst, yes=yes, force=force, backup=backup)
 
 
@@ -106,6 +173,7 @@ def rm(
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
 ) -> None:
+    """Remove a resource from connected state."""
     rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
 
 

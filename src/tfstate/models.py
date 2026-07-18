@@ -48,17 +48,16 @@ class State(BaseModel):
     def get_resource(self, address: str) -> Optional[tuple[Resource, int]]:
         for res in self.resources:
             if res.address == address:
-                return (res, 0)
-            if address.startswith(res.address):
-                suffix = address[len(res.address):]
-                if suffix.startswith('[') and ']' in suffix:
-                    idx_str = suffix[1:suffix.index(']')]
-                    try:
-                        idx = int(idx_str)
-                        if idx < len(res.instances):
-                            return (res, idx)
-                    except ValueError:
-                        pass
+                return (res, 0) if len(res.instances) == 1 else None
+            if not address.startswith(f"{res.address}[") or not address.endswith("]"):
+                continue
+            idx_str = address[len(res.address) + 1 : -1]
+            try:
+                idx = int(idx_str)
+                if 0 <= idx < len(res.instances):
+                    return (res, idx)
+            except ValueError:
+                pass
         return None
 
     def resources_by_type(self) -> dict[str, list[Resource]]:

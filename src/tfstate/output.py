@@ -2,10 +2,11 @@ import json
 from enum import Enum
 from rich.console import Console
 from typing import Optional
+from tfstate.attrs import format_attr_path, format_attr_value, walk_attributes
 from tfstate.models import State
 
 
-console = Console()
+console = Console(soft_wrap=True)
 
 _current_format: str = "rich"
 
@@ -111,7 +112,9 @@ def print_init(
             console.print(f"  - {name}")
 
 
-def print_show(state: State, file_path: str = "unknown", backend_type: Optional[str] = None) -> None:
+def print_show(
+    state: State, file_path: str = "unknown", backend_type: Optional[str] = None
+) -> None:
     fmt = get_format()
     if fmt == "json":
         data = _show_data(state, file_path, backend_type)
@@ -162,12 +165,11 @@ def _show_data(state: State, file_path: str, backend_type: Optional[str] = None)
             "total": sum(len(r) for r in by_type.values()),
             "by_type": {t: len(r) for t, r in sorted(by_type.items())},
         },
-        "modules": {
-            (m or "root"): len(r) for m, r in sorted(by_module.items())
-        } if len(by_module) > 1 or "" not in by_module else {},
+        "modules": {(m or "root"): len(r) for m, r in sorted(by_module.items())}
+        if len(by_module) > 1 or "" not in by_module
+        else {},
         "outputs": {
-            name: {"sensitive": out.sensitive}
-            for name, out in sorted(state.outputs.items())
+            name: {"sensitive": out.sensitive} for name, out in sorted(state.outputs.items())
         },
     }
 
@@ -348,32 +350,35 @@ def _print_list_no_match_plain(
 def print_get(state: State, address: str) -> None:
     result = state.get_resource(address)
     if not result:
-        console.print(f"[red]Resource not found: {address}[/red]")
-        return
+        raise ValueError(f"Resource not found: {address}")
 
     resource, idx = result
     instance = resource.instances[idx]
     dependents = find_dependents(state, address)
+    full_address = resource.full_address(idx)
+    attributes = [
+        (format_attr_path(path), value) for path, value in walk_attributes(instance.attributes)
+    ]
 
     fmt = get_format()
     if fmt == "json":
         data = {
-            "address": resource.address,
+            "address": full_address,
             "type": resource.type,
             "provider": resource.provider,
-            "attributes": dict(sorted(instance.attributes.items())),
+            "attributes": instance.attributes,
             "dependencies": instance.dependencies,
             "dependents": dependents,
         }
         print(json.dumps(data, indent=2, default=str))
         return
     if fmt == "plain":
-        print(f"Resource: {resource.address}")
+        print(f"Resource: {full_address}")
         print(f"Type: {resource.type}")
         print(f"Provider: {resource.provider}")
         print("\nAttributes:")
-        for key, value in sorted(instance.attributes.items()):
-            print(f"  {key:<30} = {value}")
+        for key, value in attributes:
+            print(f"  {key:<30} = {format_attr_value(value)}")
         if instance.dependencies:
             print("\nDependencies:")
             for dep in instance.dependencies:
@@ -384,13 +389,13 @@ def print_get(state: State, address: str) -> None:
                 print(f"  - {dep}")
         return
 
-    console.print(f"\n[bold]Resource:[/bold] {resource.address}")
+    console.print(f"\n[bold]Resource:[/bold] {full_address}")
     console.print(f"[bold]Type:[/bold] {resource.type}")
     console.print(f"[bold]Provider:[/bold] {resource.provider}")
 
     console.print("\n[bold]Attributes:[/bold]")
-    for key, value in sorted(instance.attributes.items()):
-        console.print(f"  {key:<30} = {value}")
+    for key, value in attributes:
+        console.print(f"  {key:<30} = {format_attr_value(value)}")
 
     if instance.dependencies:
         console.print("\n[bold]Dependencies:[/bold]")
@@ -406,10 +411,137 @@ def print_get(state: State, address: str) -> None:
 def find_dependents(state: State, address: str) -> list[str]:
     dependents = []
     for resource in state.resources:
-        for instance in resource.instances:
+        for index, instance in enumerate(resource.instances):
             if address in instance.dependencies:
-                dependents.append(resource.address)
+                dependents.append(resource.full_address(index))
     return dependents
+
+
+def print_query(addresses: list[str]) -> None:
+    fmt = get_format()
+    if fmt == "json":
+        print(json.dumps(addresses, indent=2))
+        return
+    if not addresses:
+        message = "No matching resources found"
+        if fmt == "plain":
+            print(message)
+        else:
+            console.print(f"[yellow]{message}[/yellow]")
+        return
+    for address in addresses:
+        if fmt == "plain":
+            print(address)
+        else:
+            console.print(address)
+
+
+def print_diff(result: dict) -> None:
+    fmt = get_format()
+    if fmt == "json":
+        print(json.dumps(result, indent=2, default=str))
+        return
+
+    _print_metadata_notices(result["metadata"], rich=fmt == "rich")
+    summary = result["summary"]
+    has_differences = any(
+        summary[key] for key in ("resources_added", "resources_removed", "resources_modified")
+    )
+    if not has_differences:
+        if fmt == "plain":
+            print("No differences found")
+        else:
+            console.print("[green]No differences found[/green]")
+        return
+
+    if result["removed"]:
+        _print_diff_heading("Removed Resources:", rich=fmt == "rich")
+        for resource in result["removed"]:
+            _print_diff_line(
+                f"  - {resource['address']} ({resource['type']})",
+                style="red",
+                rich=fmt == "rich",
+            )
+
+    if result["added"]:
+        _print_diff_heading("Added Resources:", rich=fmt == "rich")
+        for resource in result["added"]:
+            _print_diff_line(
+                f"  + {resource['address']} ({resource['type']})",
+                style="green",
+                rich=fmt == "rich",
+            )
+
+    if result["modified"]:
+        _print_diff_heading("Modified Resources:", rich=fmt == "rich")
+        for resource in result["modified"]:
+            _print_diff_line(
+                f"  ~ {resource['address']} ({resource['type']})",
+                style="yellow",
+                rich=fmt == "rich",
+            )
+            for change in resource["changes"]:
+                _print_attribute_change(change, rich=fmt == "rich")
+
+    lines = [
+        f"Attributes changed: {summary['attributes_changed']}",
+        f"Resources added: {summary['resources_added']}",
+        f"Resources removed: {summary['resources_removed']}",
+        f"Resources modified: {summary['resources_modified']}",
+    ]
+    if fmt == "plain":
+        print()
+        for line in lines:
+            print(line)
+    else:
+        console.print()
+        for line in lines:
+            console.print(line)
+
+
+def _print_metadata_notices(metadata: list[dict], rich: bool) -> None:
+    for notice in metadata:
+        line = (
+            f"{notice['field'].capitalize()} differs: "
+            f"{format_attr_value(notice['old'])} -> {format_attr_value(notice['new'])}"
+        )
+        if rich:
+            console.print(line, style="cyan", markup=False)
+        else:
+            print(line)
+    if metadata:
+        console.print() if rich else print()
+
+
+def _print_diff_heading(heading: str, rich: bool) -> None:
+    if rich:
+        console.print(f"[bold]{heading}[/bold]")
+    else:
+        print(heading)
+
+
+def _print_diff_line(line: str, style: str, rich: bool) -> None:
+    if rich:
+        console.print(line, style=style, markup=False)
+    else:
+        print(line)
+
+
+def _print_attribute_change(change: dict, rich: bool) -> None:
+    kind = change["kind"]
+    if kind == "added":
+        line = f"      + {change['path']}: {format_attr_value(change['new'])}"
+        style = "green"
+    elif kind == "removed":
+        line = f"      - {change['path']}: {format_attr_value(change['old'])}"
+        style = "red"
+    else:
+        line = (
+            f"      {change['path']}: {format_attr_value(change['old'])} "
+            f"-> {format_attr_value(change['new'])}"
+        )
+        style = "yellow"
+    _print_diff_line(line, style=style, rich=rich)
 
 
 def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -> None:

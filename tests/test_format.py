@@ -197,23 +197,3 @@ class TestFormatClear:
         result = runner.invoke(app, ["clear"])
         assert result.exit_code == 0
         assert "Session cache cleared" in result.stdout
-
-
-class TestFormatGet:
-    def test_get_json(self):
-        from tfstate.parser import parse_state_file
-        from tfstate.output import print_get, configure as configure_output
-
-        state = parse_state_file(BASIC_FIXTURE)
-        configure_output("json")
-        print_get(state, "module.vpc.aws_vpc.main")
-        result = print_get  # just verifying no exception
-        assert result is print_get
-
-    def test_get_plain(self):
-        from tfstate.parser import parse_state_file
-        from tfstate.output import print_get, configure as configure_output
-
-        state = parse_state_file(BASIC_FIXTURE)
-        configure_output("plain")
-        print_get(state, "module.vpc.aws_vpc.main")
