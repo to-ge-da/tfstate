@@ -6,7 +6,7 @@ from tfstate.attrs import format_attr_path, format_attr_value, walk_attributes
 from tfstate.models import State
 
 
-console = Console()
+console = Console(soft_wrap=True)
 
 _current_format: str = "rich"
 
