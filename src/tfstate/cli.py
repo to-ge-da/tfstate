@@ -106,8 +106,16 @@ def query(
     missing_attr: Optional[list[str]] = typer.Option(
         None, "--missing-attr", help="Require a missing attribute path; repeat for AND"
     ),
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--interactive",
+            "-i",
+            help="Force interactive resource picker (TTY required)",
+        ),
+    ] = False,
 ) -> None:
-    """Find resources matching filters."""
+    """Explore resources interactively, or filter them non-interactively."""
     query_cmd(
         state_file,
         type=type,
@@ -115,6 +123,7 @@ def query(
         attrs=attr,
         has_attrs=has_attr,
         missing_attrs=missing_attr,
+        interactive=interactive,
     )
 
 

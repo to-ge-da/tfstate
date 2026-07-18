@@ -423,7 +423,7 @@ def print_query(addresses: list[str]) -> None:
         print(json.dumps(addresses, indent=2))
         return
     if not addresses:
-        message = "No resources matched the query."
+        message = "No matching resources found"
         if fmt == "plain":
             print(message)
         else:

@@ -187,7 +187,7 @@ class TestShowListHelp:
             "show": "Show state metadata and resource summary.",
             "list": "List resources in state.",
             "get": "Show detailed information about a resource.",
-            "query": "Find resources matching filters.",
+            "query": "Explore resources interactively, or filter them non-interactively.",
             "diff": "Compare two state files.",
             "pull": "Download state from S3.",
             "mv": "Move a resource to a new address.",

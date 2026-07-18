@@ -1,13 +1,16 @@
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
+import questionary
 import typer
 
 from tfstate import debug
 from tfstate.attrs import get_attr, is_missing, parse_attr_path
 from tfstate.models import State
-from tfstate.output import print_query
+from tfstate.output import get_format, print_get, print_query
 from tfstate.parser import StateParseError, parse_state_file
 from tfstate.session import load_session
 from tfstate.state_store import require_state
@@ -20,6 +23,7 @@ def query(
     attrs: Optional[list[str]] = None,
     has_attrs: Optional[list[str]] = None,
     missing_attrs: Optional[list[str]] = None,
+    interactive: bool = False,
 ) -> None:
     try:
         attr_filters = [_parse_attr_filter(expression) for expression in attrs or []]
@@ -38,6 +42,125 @@ def query(
         debug.exit_with_traceback(e)
         return
 
+    has_filters = any(
+        (
+            type is not None,
+            module is not None,
+            bool(attr_filters),
+            bool(has_attr_filters),
+            bool(missing_attr_filters),
+        )
+    )
+    addresses = _collect_addresses(
+        state,
+        type=type,
+        module=module,
+        attr_filters=attr_filters,
+        has_attrs=has_attr_filters,
+        missing_attrs=missing_attr_filters,
+    )
+
+    if _should_run_interactive(interactive=interactive, has_filters=has_filters):
+        _run_interactive(state, addresses)
+        return
+
+    print_query(addresses)
+
+
+def _should_run_interactive(*, interactive: bool, has_filters: bool) -> bool:
+    fmt = get_format()
+
+    if interactive and fmt in ("json", "plain"):
+        typer.echo(
+            "Error: --interactive cannot be used with --format json or plain.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if fmt != "rich":
+        return False
+
+    if interactive:
+        if not _is_tty():
+            typer.echo("Error: interactive mode requires a terminal.", err=True)
+            raise typer.Exit(1)
+        if _is_dumb_term():
+            typer.echo(
+                "Warning: TERM=dumb does not support interactive mode; "
+                "falling back to non-interactive output.",
+                err=True,
+            )
+            return False
+        return True
+
+    if has_filters:
+        return False
+
+    if _is_dumb_term():
+        if _is_tty():
+            typer.echo(
+                "Warning: TERM=dumb does not support interactive mode; "
+                "falling back to non-interactive output.",
+                err=True,
+            )
+            return False
+        typer.echo(_bare_non_tty_message(), err=True)
+        raise typer.Exit(1)
+
+    if _is_tty():
+        return True
+
+    typer.echo(_bare_non_tty_message(), err=True)
+    raise typer.Exit(1)
+
+
+def _bare_non_tty_message() -> str:
+    return (
+        "Error: bare query requires a terminal for interactive mode. "
+        "Use 'tfstate list' for inventory, add filters, or use --interactive."
+    )
+
+
+def _is_tty() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _is_dumb_term() -> bool:
+    return os.environ.get("TERM", "") == "dumb"
+
+
+def _run_interactive(state: State, addresses: list[str]) -> None:
+    if not addresses:
+        print_query(addresses)
+        return
+    if len(addresses) == 1:
+        print_get(state, addresses[0])
+        return
+
+    try:
+        selected = questionary.autocomplete(
+            "Select a resource:",
+            choices=addresses,
+            validate=lambda text: text in addresses or "Choose a resource from the list",
+        ).ask()
+    except KeyboardInterrupt:
+        raise typer.Exit(130)
+
+    if selected is None:
+        raise typer.Exit(130)
+
+    print_get(state, selected)
+
+
+def _collect_addresses(
+    state: State,
+    *,
+    type: Optional[str],
+    module: Optional[str],
+    attr_filters: list[tuple[str, Any]],
+    has_attrs: list[str],
+    missing_attrs: list[str],
+) -> list[str]:
     addresses: list[str] = []
     for resource in state.resources:
         if type is not None and resource.type != type:
@@ -48,13 +171,12 @@ def query(
             if not _matches_attributes(
                 instance.attributes,
                 attr_filters,
-                has_attr_filters,
-                missing_attr_filters,
+                has_attrs,
+                missing_attrs,
             ):
                 continue
             addresses.append(resource.full_address(index))
-
-    print_query(addresses)
+    return addresses
 
 
 def _parse_attr_filter(expression: str) -> tuple[str, Any]:

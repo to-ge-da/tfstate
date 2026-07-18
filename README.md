@@ -36,11 +36,15 @@ tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
 # View state summary
 tfstate show state.json
 
-# List all resources
+# List all resources (non-interactive inventory)
 tfstate list state.json
 
-# Query specific resource types
+# Explore resources interactively (TTY; selects one and shows details)
+tfstate query state.json
+
+# Filter resources non-interactively (scriptable; use --format json|plain)
 tfstate query state.json --type aws_instance
+tfstate --format json query state.json --attr tags.Environment=prod
 
 # Get detailed resource info
 tfstate get state.json aws_vpc.main

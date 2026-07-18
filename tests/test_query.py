@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -37,7 +38,7 @@ def typed_fixture(tmp_path):
     return path
 
 
-def test_query_without_filters_returns_every_instance():
+def test_query_json_without_filters_returns_every_instance():
     result = runner.invoke(app, ["--format", "json", "query", str(BASIC_FIXTURE)])
 
     assert result.exit_code == 0
@@ -47,6 +48,165 @@ def test_query_without_filters_returns_every_instance():
         "module.vpc.aws_subnet.public[1]",
         "aws_instance.bastion",
     ]
+
+
+def test_bare_query_non_tty_rich_exits_with_migration_guidance():
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE)])
+
+    assert result.exit_code == 1
+    assert "bare query requires a terminal" in result.output
+    assert "tfstate list" in result.output
+    assert "--interactive" in result.output
+
+
+def test_interactive_non_tty_exits_with_terminal_error():
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive"])
+
+    assert result.exit_code == 1
+    assert "interactive mode requires a terminal" in result.output
+
+
+@pytest.mark.parametrize("fmt", ["json", "plain"])
+def test_interactive_incompatible_with_machine_formats(fmt):
+    result = runner.invoke(app, ["--format", fmt, "query", str(BASIC_FIXTURE), "--interactive"])
+
+    assert result.exit_code == 1
+    assert "--interactive cannot be used with --format" in result.output
+
+
+def test_interactive_success_shows_get_output(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    prompt = MagicMock()
+    prompt.ask.return_value = "aws_instance.bastion"
+    monkeypatch.setattr(
+        "tfstate.commands.query.questionary.autocomplete",
+        lambda *args, **kwargs: prompt,
+    )
+
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive"])
+
+    assert result.exit_code == 0
+    assert "Resource:" in result.stdout
+    assert "aws_instance.bastion" in result.stdout
+    assert "instance_type" in result.stdout
+    prompt.ask.assert_called_once()
+
+
+def test_interactive_cancel_exits_130(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    prompt = MagicMock()
+    prompt.ask.return_value = None
+    monkeypatch.setattr(
+        "tfstate.commands.query.questionary.autocomplete",
+        lambda *args, **kwargs: prompt,
+    )
+
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive"])
+
+    assert result.exit_code == 130
+
+
+def test_interactive_keyboard_interrupt_exits_130(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    prompt = MagicMock()
+    prompt.ask.side_effect = KeyboardInterrupt
+    monkeypatch.setattr(
+        "tfstate.commands.query.questionary.autocomplete",
+        lambda *args, **kwargs: prompt,
+    )
+
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive"])
+
+    assert result.exit_code == 130
+
+
+def test_one_candidate_auto_selects_without_prompt(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    called = False
+
+    def fail_if_called(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("autocomplete should not be called for one candidate")
+
+    monkeypatch.setattr(
+        "tfstate.commands.query.questionary.autocomplete",
+        fail_if_called,
+    )
+
+    result = runner.invoke(
+        app,
+        ["query", str(BASIC_FIXTURE), "--interactive", "--type", "aws_instance"],
+    )
+
+    assert result.exit_code == 0
+    assert not called
+    assert "aws_instance.bastion" in result.stdout
+    assert "Resource:" in result.stdout
+
+
+def test_interactive_empty_candidates_message(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    result = runner.invoke(
+        app,
+        ["query", str(BASIC_FIXTURE), "--interactive", "--type", "nonexistent"],
+    )
+
+    assert result.exit_code == 0
+    assert "No matching resources found" in result.stdout
+
+
+def test_interactive_with_filter_narrows_candidates(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: False)
+
+    seen_choices = []
+
+    def capture_autocomplete(*args, **kwargs):
+        seen_choices.extend(kwargs.get("choices", []))
+        prompt = MagicMock()
+        prompt.ask.return_value = "module.vpc.aws_vpc.main"
+        return prompt
+
+    monkeypatch.setattr(
+        "tfstate.commands.query.questionary.autocomplete",
+        capture_autocomplete,
+    )
+
+    result = runner.invoke(
+        app,
+        ["query", str(BASIC_FIXTURE), "--interactive", "--module", "module.vpc"],
+    )
+
+    assert result.exit_code == 0
+    assert seen_choices == [
+        "module.vpc.aws_vpc.main",
+        "module.vpc.aws_subnet.public[0]",
+        "module.vpc.aws_subnet.public[1]",
+    ]
+    assert "module.vpc.aws_vpc.main" in result.stdout
+
+
+def test_term_dumb_falls_back_to_non_interactive(monkeypatch):
+    monkeypatch.setattr("tfstate.commands.query._is_tty", lambda: True)
+    monkeypatch.setattr("tfstate.commands.query._is_dumb_term", lambda: True)
+
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE)])
+
+    assert result.exit_code == 0
+    assert "TERM=dumb" in result.output
+    assert "module.vpc.aws_vpc.main" in result.stdout
+    assert "aws_instance.bastion" in result.stdout
 
 
 def test_query_filters_by_type_and_module_with_and_semantics():
@@ -153,8 +313,8 @@ def test_query_no_match_contracts():
     )
 
     assert rich.exit_code == plain.exit_code == json_result.exit_code == 0
-    assert "No resources matched the query." in rich.stdout
-    assert "No resources matched the query." in plain.stdout
+    assert "No matching resources found" in rich.stdout
+    assert "No matching resources found" in plain.stdout
     assert json.loads(json_result.stdout) == []
 
 
@@ -199,3 +359,4 @@ def test_query_help():
     assert "--attr" in result.stdout
     assert "--has-attr" in result.stdout
     assert "--missing-attr" in result.stdout
+    assert "--interactive" in result.stdout
