@@ -464,21 +464,21 @@ tfstate/
 
 ### Phase 2: Connected Mode + Advanced Inspection (v0.2.0)
 
-- [ ] `init` command — connect to real backend, store context
-- [ ] Refactor `show` and `list` — work against both offline JSON and connected state
+- [x] `init` command — connect to real backend, store context
+- [x] Refactor `show` and `list` — work against both offline JSON and connected state
 - [x] `get` command — detailed resource view
-- [x] `query` command with filters
+- [x] `query` command with filters (including interactive bare query)
 - [ ] `graph` command (tree output)
 - [x] `diff` command
-- [ ] Output format options (json, plain)
-- [ ] `--debug` flag
+- [x] Output format options (json, plain) — global flag today; command-level placement tracked in #46
+- [x] `--debug` flag — global flag today; command-level placement tracked in #46
 
 ### Phase 3: State Manipulation (v0.3.0)
 
-- [ ] `rm` command — with backup, confirmation, init enforcement
-- [ ] `mv` command — with backup, init enforcement
+- [x] `rm` command — with backup, confirmation, init enforcement
+- [x] `mv` command — with backup, init enforcement
 - [ ] `filter` command (offline only)
-- [ ] Safety confirmation workflow (unless `--force`)
+- [x] Safety confirmation workflow (unless `--force` / `--yes`)
 
 ### Phase 4: Polish & Extensions (v1.0.0)
 

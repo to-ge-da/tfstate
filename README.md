@@ -42,16 +42,26 @@ tfstate list state.json
 # Explore resources interactively (TTY; selects one and shows details)
 tfstate query state.json
 
-# Filter resources non-interactively (scriptable; use --format json|plain)
+# Filter resources non-interactively (scriptable)
 tfstate query state.json --type aws_instance
 tfstate --format json query state.json --attr tags.Environment=prod
+tfstate --format plain query state.json --module module.vpc
 
-# Get detailed resource info
-tfstate get state.json aws_vpc.main
+# Get detailed resource info (offline)
+tfstate get state.json module.vpc.aws_vpc.main
+
+# Connected mode after init (omit the file argument)
+tfstate init state.json
+tfstate get module.vpc.aws_vpc.main
+tfstate query --type aws_instance
 
 # Compare state snapshots
 tfstate diff old.json new.json
 ```
+
+Global flags like `--format` and `--debug` currently must appear **before** the
+subcommand (for example `tfstate --format json query ...`). Placing them after
+the command fails until [#46](https://github.com/to-ge-da/tfstate/issues/46) is fixed.
 
 ## Documentation
 
