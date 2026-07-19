@@ -39,7 +39,7 @@ def typed_fixture(tmp_path):
 
 
 def test_query_json_without_filters_returns_every_instance():
-    result = runner.invoke(app, ["--format", "json", "query", str(BASIC_FIXTURE)])
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--format", "json"])
 
     assert result.exit_code == 0
     assert json.loads(result.stdout) == [
@@ -68,7 +68,7 @@ def test_interactive_non_tty_exits_with_terminal_error():
 
 @pytest.mark.parametrize("fmt", ["json", "plain"])
 def test_interactive_incompatible_with_machine_formats(fmt):
-    result = runner.invoke(app, ["--format", fmt, "query", str(BASIC_FIXTURE), "--interactive"])
+    result = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--interactive", "--format", fmt])
 
     assert result.exit_code == 1
     assert "--interactive cannot be used with --format" in result.output
@@ -240,8 +240,6 @@ def test_query_repeatable_attributes_and_typed_values(typed_fixture):
     result = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "query",
             str(typed_fixture),
             "--attr",
@@ -252,6 +250,8 @@ def test_query_repeatable_attributes_and_typed_values(typed_fixture):
             "count=3",
             "--attr",
             "ports=[80, 443]",
+            "--format",
+            "json",
         ],
     )
 
@@ -263,27 +263,27 @@ def test_query_has_and_missing_attributes_distinguish_null(typed_fixture):
     present = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "query",
             str(typed_fixture),
             "--has-attr",
             "nullable",
             "--has-attr",
             "tags.Owner",
+            "--format",
+            "json",
         ],
     )
     missing = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "query",
             str(typed_fixture),
             "--missing-attr",
             "tags.CostCenter",
             "--type",
             "aws_instance",
+            "--format",
+            "json",
         ],
     )
 
@@ -297,12 +297,12 @@ def test_query_list_index_path(typed_fixture):
     result = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "query",
             str(typed_fixture),
             "--attr",
             "ports[1]=443",
+            "--format",
+            "json",
         ],
     )
 
@@ -314,11 +314,11 @@ def test_query_no_match_contracts():
     rich = runner.invoke(app, ["query", str(BASIC_FIXTURE), "--type", "nonexistent"])
     plain = runner.invoke(
         app,
-        ["--format", "plain", "query", str(BASIC_FIXTURE), "--type", "nonexistent"],
+        ["query", str(BASIC_FIXTURE), "--type", "nonexistent", "--format", "plain"],
     )
     json_result = runner.invoke(
         app,
-        ["--format", "json", "query", str(BASIC_FIXTURE), "--type", "nonexistent"],
+        ["query", str(BASIC_FIXTURE), "--type", "nonexistent", "--format", "json"],
     )
 
     assert rich.exit_code == plain.exit_code == json_result.exit_code == 0

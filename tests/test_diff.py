@@ -38,11 +38,11 @@ def test_diff_json_has_stable_schema_and_metadata_notices():
     result = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "diff",
             str(BASIC_FIXTURE),
             str(MODIFIED_FIXTURE),
+            "--format",
+            "json",
         ],
     )
 
@@ -70,11 +70,11 @@ def test_diff_plain_uses_same_sections():
     result = runner.invoke(
         app,
         [
-            "--format",
-            "plain",
             "diff",
             str(BASIC_FIXTURE),
             str(MODIFIED_FIXTURE),
+            "--format",
+            "plain",
         ],
     )
 
@@ -89,7 +89,7 @@ def test_diff_identical_files():
     rich = runner.invoke(app, ["diff", str(BASIC_FIXTURE), str(BASIC_FIXTURE)])
     json_result = runner.invoke(
         app,
-        ["--format", "json", "diff", str(BASIC_FIXTURE), str(BASIC_FIXTURE)],
+        ["diff", str(BASIC_FIXTURE), str(BASIC_FIXTURE), "--format", "json"],
     )
 
     assert rich.exit_code == 0

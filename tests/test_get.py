@@ -45,11 +45,11 @@ def test_get_json_preserves_nested_attributes():
     result = runner.invoke(
         app,
         [
-            "--format",
-            "json",
             "get",
             str(BASIC_FIXTURE),
             "module.vpc.aws_vpc.main",
+            "--format",
+            "json",
         ],
     )
 
@@ -68,11 +68,11 @@ def test_get_plain_indexed_address():
     result = runner.invoke(
         app,
         [
-            "--format",
-            "plain",
             "get",
             str(BASIC_FIXTURE),
             "module.vpc.aws_subnet.public[1]",
+            "--format",
+            "plain",
         ],
     )
 
