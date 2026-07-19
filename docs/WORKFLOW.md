@@ -56,10 +56,10 @@ Read-only analysis of state JSON files. No `terraform` binary needed.
 | `list` | ✅ Implemented | `tfstate list <file> [--type] [--module]` |
 | `pull` | ✅ Implemented | `tfstate pull s3://bucket/key` |
 | `init` | ✅ Implemented | `tfstate init <file>` — parses and stores in memory |
-| `get` | 📋 Planned (#9) | `tfstate get <file> <address>` |
-| `query` | 📋 Planned (#6) | `tfstate query <file> [--type] [--attr]` |
+| `get` | ✅ Implemented | `tfstate get <file> <address>` |
+| `query` | ✅ Implemented | `tfstate query <file> [--type] [--attr]` — see [CLI reference](cli.md#query) |
 | `graph` | 📋 Planned (#10) | `tfstate graph <file> [--address] [--depth]` |
-| `diff` | 📋 Planned (#7) | `tfstate diff <file1> <file2>` |
+| `diff` | ✅ Implemented | `tfstate diff <file1> <file2>` |
 | `filter` | 📋 Planned | `tfstate filter <file> --output <out>` |
 
 ### Example session (offline)
@@ -144,10 +144,10 @@ tfstate list --module module.vpc                    # 📋 connected mode (#5)
 tfstate get module.vpc.aws_vpc.main                 # 📋 (#9)
 tfstate get aws_instance.bastion                    # 📋 (#9)
 
-# Query with filters
-tfstate query --type aws_instance --attr tags.Environment=prod   # 📋 (#6)
-tfstate query --has-attr tags.Name                               # 📋 (#6)
-tfstate query --missing-attr tags.Owner                          # 📋 (#6)
+# Query with filters — see docs/cli.md#query
+tfstate query --type aws_instance --attr tags.Environment=prod
+tfstate query --has-attr tags.Name
+tfstate query --missing-attr tags.Owner
 
 # Resource dependency graph
 tfstate graph state.json --address aws_vpc.main --depth 2       # 📋 (#10)
@@ -227,10 +227,10 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | Issue | Feature | Command |
 |-------|---------|---------|
 | #5 | Connected show/list | `tfstate show` / `tfstate list` (no file arg) |
-| #6 | Query command | `tfstate query [file] --type --attr` |
-| #7 | Diff command | `tfstate diff <file1> <file2>` |
-| #8 | Output format flags | `--format json\|plain` |
-| #9 | Get command | `tfstate get [file] <address>` |
+| #6 | Query command | ✅ `tfstate query [file] --type --attr` — [cli.md#query](cli.md#query) |
+| #7 | Diff command | ✅ `tfstate diff <file1> <file2>` |
+| #8 | Output format flags | ✅ `--format json\|plain` |
+| #9 | Get command | ✅ `tfstate get [file] <address>` |
 | #10 | Graph command | `tfstate graph <file> --address --depth` |
 | #11 | Debug flag | `--debug` on all commands |
 | #13 | Custom workspace (-o) | `init --terraform -o <path>` |
@@ -254,8 +254,8 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | List resources | `tfstate list <file>` | `tfstate list` (after init) |
 | Remove a resource | `terraform -chdir=<ws> state rm '<addr>'` ¹ | `tfstate rm <addr>` |
 | Move a resource | `terraform -chdir=<ws> state mv '<src>' '<dst>'` ¹ | `tfstate mv <src> <dst>` |
-| Find specific resources | N/A | `tfstate query [file] --type` |
-| Compare two states | N/A | `tfstate diff <file1> <file2>` |
+| Find specific resources | `tfstate query [file] --type` ([cli.md](cli.md#query)) | — |
+| Compare two states | `tfstate diff <file1> <file2>` | — |
 | View dependency tree | N/A | `tfstate graph <file>` |
 
 ¹ Wrap addresses in single quotes when they contain square brackets with quoted keys. This prevents the shell from stripping the inner double quotes. Applies to all `state` subcommands (`show`, `rm`, `mv`, etc.).  

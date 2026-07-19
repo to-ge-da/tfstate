@@ -65,8 +65,8 @@ the command fails until [#46](https://github.com/to-ge-da/tfstate/issues/46) is 
 
 ## Documentation
 
+- [CLI reference](docs/cli.md) — Command guide (init and query today; more coming)
 - [Workflows](docs/WORKFLOW.md) — End-to-end guides for offline and connected modes
-- [init command](docs/init.md) — Initialize state from S3 or local files
 - [Project Specification](docs/SPEC.md) — Architecture, commands, and implementation plan
 
 ## Status
