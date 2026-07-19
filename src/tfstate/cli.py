@@ -46,12 +46,26 @@ def init(
     output: Annotated[
         Optional[str], typer.Option("-o", "--output", help="Custom workspace directory")
     ] = None,
+    fresh: Annotated[
+        bool,
+        typer.Option(
+            "--fresh",
+            help="Ignore cached terraform workspace (use a new temp dir)",
+        ),
+    ] = False,
     debug: DebugOption = False,
     format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Initialize state from a local file or S3 backend."""
     configure_globals(debug, format)
-    init_cmd(state_path, profile=profile, region=region, terraform=terraform, output=output)
+    init_cmd(
+        state_path,
+        profile=profile,
+        region=region,
+        terraform=terraform,
+        output=output,
+        fresh=fresh,
+    )
 
 
 @app.command("show")
