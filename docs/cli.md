@@ -13,11 +13,11 @@ This page currently documents **init** and **query**. Other commands will be add
 
 ## Shared flags
 
-These options are defined on the app callback today, so they must appear **before** the subcommand:
+`--format` / `-f` and `--debug` are available on each command. Place them **after** the subcommand:
 
 ```bash
-tfstate --format json query state.json --type aws_instance
-tfstate --debug init s3://my-bucket/prod/terraform.tfstate --terraform
+tfstate query state.json --type aws_instance --format json
+tfstate init s3://my-bucket/prod/terraform.tfstate --terraform --debug
 ```
 
 | Flag | Values | Purpose |
@@ -25,7 +25,7 @@ tfstate --debug init s3://my-bucket/prod/terraform.tfstate --terraform
 | `--format`, `-f` | `rich` (default), `json`, `plain` | Machine- or human-readable output |
 | `--debug` | flag | Full stack traces (and extra init diagnostics) |
 
-Moving these flags so they work after the subcommand is tracked in [#46](https://github.com/to-ge-da/tfstate/issues/46).
+Pre-command placement (`tfstate --format json query …`) is no longer accepted.
 
 ---
 
@@ -47,49 +47,55 @@ tfstate init <state-path> [OPTIONS]
 
 - `--profile`, `-p` — AWS profile (S3)
 - `--region`, `-r` — AWS region (S3)
-- `--terraform` — Initialize a real Terraform backend workspace
-- `--output`, `-o` — Custom workspace directory (with `--terraform`)
-
-Also accepts shared `--format` / `--debug` (before `init`).
+- `--terraform` — Initialize a real Terraform backend workspace (requires `terraform` in `PATH`)
+- `--output`, `-o` — Custom directory: workspace for `--terraform`, or a folder that receives `state.json` in read-only mode
+- `--format`, `-f` — Output format for the init summary (`rich`, `json`, `plain`)
+- `--debug` — Full stack traces; also surfaces Terraform init / provider-cache diagnostics
 
 ### Examples
 
-**Read-only** — download/parse state JSON (no Terraform binary):
+**Read-only** — parse state JSON (no Terraform binary):
 
 ```bash
 tfstate init s3://my-bucket/prod/terraform.tfstate
 tfstate init ./terraform.tfstate
-tfstate --format json init ./terraform.tfstate
+tfstate init ./terraform.tfstate --format json
+tfstate init ./terraform.tfstate -o ./my-state-dir
 ```
 
-**Terraform backend** — create a workspace, write `backend.tf`, run `terraform init`:
+**Terraform mode** — create a workspace, configure the backend, run `terraform init` internally:
 
 ```bash
 tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
 tfstate init s3://my-bucket/prod/terraform.tfstate --terraform -o ./my-workspace
+tfstate init ./terraform.tfstate --terraform --debug
 ```
 
-After `--terraform`, you can use Terraform in that workspace:
+After init, stay in the `tfstate` CLI (omit the file argument in connected mode):
 
 ```bash
-terraform -chdir=/tmp/tfstate-xxxxx show
-terraform -chdir=/tmp/tfstate-xxxxx state list
+tfstate show
+tfstate list
+tfstate query --type aws_instance
+tfstate rm module.vpc.aws_instance.bastion --yes   # requires --terraform
+tfstate mv aws_instance.a aws_instance.b --yes      # requires --terraform
 ```
 
 ### How it works
 
-**Read-only mode**
+**Read-only mode** (default)
 
-1. Downloads state from S3 (or reads a local file)
-2. Parses JSON and prints a summary
-3. Stores state in the session for later commands (`show`, `list`, `query`, …)
+1. Loads state from S3 or a local file
+2. Parses JSON and prints a summary (`--format` controls that summary)
+3. Stores state in the session for later commands
+4. With `-o/--output`, also writes `state.json` into that directory
 
-**Terraform mode**
+**Terraform mode** (`--terraform`)
 
-1. Downloads state from S3 (or uses a local path)
-2. Creates a workspace (`/tmp/tfstate-*/` or `--output`)
-3. Writes `backend.tf` and runs `terraform init`
-4. Enables real state manipulation (`rm`, `mv`, or raw `terraform state …`)
+1. Loads state from S3 or a local file
+2. Creates a workspace (`/tmp/tfstate-*/` or `-o/--output`)
+3. Configures the backend (S3 `backend.tf`, or a local state copy) and runs `terraform init`
+4. Enables connected manipulation via `tfstate rm` / `tfstate mv`
 
 Provider binaries are shared via `TF_PLUGIN_CACHE_DIR`. Details and troubleshooting: [Provider cache](provider-cache.md).
 
@@ -120,6 +126,8 @@ tfstate query [OPTIONS]
 
 `--interactive` cannot be combined with `--format json` or `--format plain`.
 
+Bare `query` outside a usable TTY exits with an error: use `tfstate list`, add filters, or pass `--interactive` on a real terminal.
+
 ### Filters
 
 All filters combine with **AND**. Repeat a flag for multiple conditions.
@@ -141,7 +149,7 @@ Paths use dots for nested objects and `[n]` for list indexes:
 
 #### `--attr` values
 
-The right-hand side is parsed as JSON when possible (`true`, `3`, `"[80, 443]"`-style lists); otherwise it is treated as a string:
+The right-hand side is parsed as JSON when possible (`true`, `3`, lists); otherwise it is treated as a string:
 
 ```bash
 tfstate query state.json --attr tags.Environment=prod
@@ -164,7 +172,7 @@ tfstate query state.json --type aws_instance
 tfstate query state.json --module module.vpc
 
 # Attribute filters
-tfstate --format json query state.json --attr tags.Environment=prod
+tfstate query state.json --attr tags.Environment=prod --format json
 tfstate query state.json --has-attr tags.Name
 tfstate query state.json --missing-attr tags.Owner
 
