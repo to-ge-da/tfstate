@@ -187,6 +187,12 @@ class TestFingerprint:
         assert fingerprint_s3("s3://bucket/key", "eu-west-1", "prof") != base
         assert fingerprint_s3("s3://bucket/key", "us-east-1", "other") != base
 
+    def test_s3_normalizes_equivalent_uris(self):
+        base = fingerprint_s3("s3://bucket/path/to/state", "us-east-1", "prof")
+        assert fingerprint_s3("s3://bucket//path/to/state", "us-east-1", "prof") == base
+        assert fingerprint_s3("s3://bucket/path/to/state/", "us-east-1", "prof") == base
+        assert fingerprint_s3("s3://bucket//path//to/state/", "us-east-1", "prof") == base
+
     def test_local_uses_absolute_path(self, tmp_path: Path):
         state = tmp_path / "state.json"
         state.write_text("{}")
@@ -525,3 +531,46 @@ class TestPersistedTerraformWorkspace:
         assert len(calls) == 1
         assert calls[0]["cwd"] == str(ws.resolve())
         assert (ws / "terraform.tfstate").exists()
+
+    def test_failed_init_removes_poisoned_cache(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        fp = fingerprint_local(fixture)
+        expected = cache_root() / fp
+
+        def failing_run(cmd, *args, **kwargs):
+            cwd = Path(kwargs["cwd"])
+            (cwd / "backend.tf").write_text("partial")
+            (cwd / ".terraform").mkdir(exist_ok=True)
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="init failed")
+
+        monkeypatch.setattr(init_module.subprocess, "run", failing_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+
+        result = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert result.exit_code == 1
+        assert "terraform init failed" in result.output
+        assert not expected.exists()
+
+        calls = []
+
+        def ok_run(cmd, *args, **kwargs):
+            calls.append(kwargs.get("cwd"))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", ok_run)
+        clear_state()
+        clear_session()
+        retry = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert retry.exit_code == 0, retry.output
+        assert expected.is_dir()
+        assert read_sidecar(expected)["fingerprint"] == fp
+        assert calls == [str(expected)]
+
+    def test_fresh_without_terraform_errors(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        result = runner.invoke(app, ["init", str(fixture), "--fresh"])
+        assert result.exit_code == 1
+        assert "--fresh requires --terraform" in result.output

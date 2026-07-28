@@ -15,6 +15,7 @@ from tfstate.state_store import set_state, set_terraform_mode, set_workspace
 from tfstate.session import save_session
 from tfstate.output import print_init, console
 from tfstate.workspace_cache import (
+    cache_root,
     cached_workspace_path,
     fingerprint_local,
     fingerprint_s3,
@@ -277,6 +278,20 @@ def resolve_terraform_workspace(
     return str(cache_path), False
 
 
+def cleanup_failed_cache_workspace(workspace: str, *, reused: bool) -> None:
+    """Remove a cold-path cache dir left without a sidecar after terraform init fails."""
+    if reused:
+        return
+    path = Path(workspace).resolve()
+    try:
+        root = cache_root().resolve()
+    except OSError:
+        return
+    if path != root and path.is_relative_to(root) and path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+        debug.logger.debug("Removed incomplete cached workspace: %s", path)
+
+
 def init(
     state_path: str,
     profile: Optional[str] = None,
@@ -286,6 +301,9 @@ def init(
     fresh: bool = False,
 ) -> None:
     try:
+        if fresh and not terraform:
+            raise ValueError("--fresh requires --terraform")
+
         debug.logger.debug("Initializing state from: %s", state_path)
         if is_s3_uri(state_path):
             content, source = download_from_s3(state_path, profile, region)
@@ -302,9 +320,13 @@ def init(
                     )
                 fp = fingerprint_s3(state_path, region, profile)
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
-                workspace, backend_config = init_terraform_backend(
-                    state_path, profile, region, workspace=workspace
-                )
+                try:
+                    workspace, backend_config = init_terraform_backend(
+                        state_path, profile, region, workspace=workspace
+                    )
+                except RuntimeError:
+                    cleanup_failed_cache_workspace(workspace, reused=reused)
+                    raise
                 write_sidecar(workspace, s3_sidecar_metadata(fp, state_path, region, profile))
                 if reused:
                     debug.logger.debug("Warm terraform init completed for %s", workspace)
@@ -339,9 +361,13 @@ def init(
                     )
                 fp = fingerprint_local(state_path)
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
-                workspace, backend_config = init_local_terraform_backend(
-                    Path(state_path), workspace
-                )
+                try:
+                    workspace, backend_config = init_local_terraform_backend(
+                        Path(state_path), workspace
+                    )
+                except RuntimeError:
+                    cleanup_failed_cache_workspace(workspace, reused=reused)
+                    raise
                 write_sidecar(workspace, local_sidecar_metadata(fp, state_path))
                 if reused:
                     debug.logger.debug("Warm terraform init completed for %s", workspace)

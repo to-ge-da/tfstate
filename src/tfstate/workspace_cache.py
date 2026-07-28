@@ -1,21 +1,29 @@
 import hashlib
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 SIDECAR_NAME = ".tfstate-backend.json"
 
 
 def cache_root() -> Path:
-    import os
-
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg) if xdg else Path.home() / ".cache"
     return base / "tfstate" / "workspaces"
 
 
+def normalize_s3_uri(uri: str) -> str:
+    parsed = urlparse(uri)
+    bucket = parsed.netloc
+    key = re.sub(r"/+", "/", parsed.path.strip("/"))
+    return f"s3://{bucket}/{key}"
+
+
 def fingerprint_s3(uri: str, region: Optional[str], profile: Optional[str]) -> str:
-    material = f"{uri}:{region or ''}:{profile or ''}"
+    material = f"{normalize_s3_uri(uri)}:{region or ''}:{profile or ''}"
     return hashlib.sha256(material.encode()).hexdigest()[:8]
 
 
