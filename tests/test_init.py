@@ -12,10 +12,22 @@ from tfstate.commands.init import (
     generate_backend_tf,
     check_terraform_installed,
     resolve_workspace,
+    resolve_terraform_workspace,
     build_terraform_env,
+)
+from tfstate.workspace_cache import (
+    cache_root,
+    fingerprint_local,
+    fingerprint_s3,
+    local_sidecar_metadata,
+    read_sidecar,
+    s3_sidecar_metadata,
+    write_sidecar,
 )
 from tfstate import debug
 from tfstate.cli import app
+from tfstate.state_store import get_terraform_workspace, clear_state
+from tfstate.session import clear_session
 
 
 runner = CliRunner()
@@ -94,6 +106,7 @@ class TestInitCommandHelp:
         assert "--terraform" in result.stdout
         assert "--output" in result.stdout
         assert "-o" in result.stdout
+        assert "--fresh" in result.stdout
 
 
 class TestInitOutputFlag:
@@ -159,6 +172,97 @@ class TestResolveWorkspace:
         path, reused = resolve_workspace(None)
         assert "tfstate-" in path
         assert reused is False
+
+
+class TestFingerprint:
+    def test_s3_same_inputs_same_fingerprint(self):
+        a = fingerprint_s3("s3://bucket/key", "us-east-1", "prof")
+        b = fingerprint_s3("s3://bucket/key", "us-east-1", "prof")
+        assert a == b
+        assert len(a) == 8
+
+    def test_s3_different_key_region_profile(self):
+        base = fingerprint_s3("s3://bucket/key", "us-east-1", "prof")
+        assert fingerprint_s3("s3://bucket/other", "us-east-1", "prof") != base
+        assert fingerprint_s3("s3://bucket/key", "eu-west-1", "prof") != base
+        assert fingerprint_s3("s3://bucket/key", "us-east-1", "other") != base
+
+    def test_s3_normalizes_equivalent_uris(self):
+        base = fingerprint_s3("s3://bucket/path/to/state", "us-east-1", "prof")
+        assert fingerprint_s3("s3://bucket//path/to/state", "us-east-1", "prof") == base
+        assert fingerprint_s3("s3://bucket/path/to/state/", "us-east-1", "prof") == base
+        assert fingerprint_s3("s3://bucket//path//to/state/", "us-east-1", "prof") == base
+
+    def test_local_uses_absolute_path(self, tmp_path: Path):
+        state = tmp_path / "state.json"
+        state.write_text("{}")
+        assert fingerprint_local(state) == fingerprint_local(str(state.resolve()))
+        other = tmp_path / "other.json"
+        other.write_text("{}")
+        assert fingerprint_local(state) != fingerprint_local(other)
+
+
+class TestResolveTerraformWorkspace:
+    def test_default_creates_cache_dir(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        fp = "abcd1234"
+        path, reused = resolve_terraform_workspace(None, fp)
+        assert reused is False
+        assert Path(path) == cache_root() / fp
+        assert Path(path).is_dir()
+
+    def test_reuses_cached_workspace_with_sidecar(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        fp = "abcd1234"
+        ws = cache_root() / fp
+        ws.mkdir(parents=True)
+        write_sidecar(ws, s3_sidecar_metadata(fp, "s3://b/k", "us-east-1", None))
+        path, reused = resolve_terraform_workspace(None, fp)
+        assert reused is True
+        assert Path(path) == ws
+
+    def test_fresh_uses_temp_and_leaves_cache(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        fp = "abcd1234"
+        cached = cache_root() / fp
+        cached.mkdir(parents=True)
+        write_sidecar(cached, s3_sidecar_metadata(fp, "s3://b/k", None, None))
+        path, reused = resolve_terraform_workspace(None, fp, fresh=True)
+        assert reused is False
+        assert "tfstate-" in path
+        assert Path(path) != cached
+        assert cached.is_dir()
+        assert read_sidecar(cached) is not None
+
+    def test_output_match_reuses(self, tmp_path: Path):
+        fp = "abcd1234"
+        ws = tmp_path / "custom"
+        ws.mkdir()
+        write_sidecar(ws, local_sidecar_metadata(fp, tmp_path / "state.json"))
+        path, reused = resolve_terraform_workspace(str(ws), fp)
+        assert reused is True
+        assert Path(path) == ws.resolve()
+
+    def test_output_mismatch_errors(self, tmp_path: Path):
+        fp = "abcd1234"
+        ws = tmp_path / "custom"
+        ws.mkdir()
+        write_sidecar(ws, s3_sidecar_metadata("deadbeef", "s3://other/key", None, None))
+        with pytest.raises(ValueError, match="different backend"):
+            resolve_terraform_workspace(str(ws), fp)
+
+    def test_output_non_empty_without_sidecar_errors(self, tmp_path: Path):
+        ws = tmp_path / "custom"
+        ws.mkdir()
+        (ws / "junk.txt").write_text("x")
+        with pytest.raises(ValueError, match="not empty"):
+            resolve_terraform_workspace(str(ws), "abcd1234")
+
+    def test_different_fingerprints_different_dirs(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        a, _ = resolve_terraform_workspace(None, "aaaaaaaa")
+        b, _ = resolve_terraform_workspace(None, "bbbbbbbb")
+        assert a != b
 
 
 class TestTerraformBackend:
@@ -334,3 +438,139 @@ class TestTerraformInitPassesCacheEnv:
 
         assert "terraform init output" in caplog.text
         assert "Installing hashicorp/null" in caplog.text
+
+
+class TestPersistedTerraformWorkspace:
+    def _mock_terraform(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append({"cmd": cmd, "cwd": kwargs.get("cwd")})
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+        return calls
+
+    def test_local_terraform_reuses_cached_workspace(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        calls = self._mock_terraform(monkeypatch)
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        fp = fingerprint_local(fixture)
+        expected = cache_root() / fp
+
+        first = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert first.exit_code == 0, first.output
+        assert expected.is_dir()
+        assert read_sidecar(expected)["fingerprint"] == fp
+        first_ws = get_terraform_workspace()
+
+        clear_state()
+        clear_session()
+        second = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert second.exit_code == 0, second.output
+        second_ws = get_terraform_workspace()
+
+        assert first_ws == second_ws == str(expected)
+        assert len(calls) == 2
+        assert all(c["cwd"] == str(expected) for c in calls)
+
+    def test_local_terraform_fresh_bypasses_cache(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        self._mock_terraform(monkeypatch)
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        fp = fingerprint_local(fixture)
+        cached = cache_root() / fp
+
+        first = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert first.exit_code == 0, first.output
+        assert cached.is_dir()
+
+        clear_state()
+        clear_session()
+        fresh = runner.invoke(app, ["init", str(fixture), "--terraform", "--fresh"])
+        assert fresh.exit_code == 0, fresh.output
+        fresh_ws = get_terraform_workspace()
+        assert fresh_ws != str(cached)
+        assert "tfstate-" in fresh_ws
+        assert cached.is_dir()
+        assert read_sidecar(cached) is not None
+
+    def test_local_terraform_output_mismatch(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        self._mock_terraform(monkeypatch)
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        write_sidecar(ws, s3_sidecar_metadata("deadbeef", "s3://other/key", None, None))
+
+        result = runner.invoke(app, ["init", str(fixture), "--terraform", "-o", str(ws)])
+        assert result.exit_code == 1
+        assert "different backend" in result.output
+
+    def test_local_terraform_output_match_reuses(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        calls = self._mock_terraform(monkeypatch)
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        fp = fingerprint_local(fixture)
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        write_sidecar(ws, local_sidecar_metadata(fp, fixture))
+
+        result = runner.invoke(app, ["init", str(fixture), "--terraform", "-o", str(ws)])
+        assert result.exit_code == 0, result.output
+        assert get_terraform_workspace() == str(ws.resolve())
+        assert len(calls) == 1
+        assert calls[0]["cwd"] == str(ws.resolve())
+        assert (ws / "terraform.tfstate").exists()
+
+    def test_failed_init_removes_poisoned_cache(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        fp = fingerprint_local(fixture)
+        expected = cache_root() / fp
+
+        def failing_run(cmd, *args, **kwargs):
+            cwd = Path(kwargs["cwd"])
+            (cwd / "backend.tf").write_text("partial")
+            (cwd / ".terraform").mkdir(exist_ok=True)
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="init failed")
+
+        monkeypatch.setattr(init_module.subprocess, "run", failing_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+
+        result = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert result.exit_code == 1
+        assert "terraform init failed" in result.output
+        assert not expected.exists()
+
+        calls = []
+
+        def ok_run(cmd, *args, **kwargs):
+            calls.append(kwargs.get("cwd"))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", ok_run)
+        clear_state()
+        clear_session()
+        retry = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert retry.exit_code == 0, retry.output
+        assert expected.is_dir()
+        assert read_sidecar(expected)["fingerprint"] == fp
+        assert calls == [str(expected)]
+
+    def test_fresh_without_terraform_errors(self, tmp_path: Path):
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        result = runner.invoke(app, ["init", str(fixture), "--fresh"])
+        assert result.exit_code == 1
+        assert "--fresh requires --terraform" in result.output

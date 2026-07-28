@@ -48,7 +48,8 @@ tfstate init <state-path> [OPTIONS]
 - `--profile`, `-p` — AWS profile (S3)
 - `--region`, `-r` — AWS region (S3)
 - `--terraform` — Initialize a real Terraform backend workspace (requires `terraform` in `PATH`)
-- `--output`, `-o` — Custom directory: workspace for `--terraform`, or a folder that receives `state.json` in read-only mode
+- `--output`, `-o` — Custom directory: terraform workspace (with `--terraform`), or a folder that receives `state.json` in read-only mode
+- `--fresh` — With `--terraform`, ignore the persisted workspace cache and use a new temp dir (does not delete the cache)
 - `--format`, `-f` — Output format for the init summary (`rich`, `json`, `plain`)
 - `--debug` — Full stack traces; also surfaces Terraform init / provider-cache diagnostics
 
@@ -63,12 +64,13 @@ tfstate init ./terraform.tfstate --format json
 tfstate init ./terraform.tfstate -o ./my-state-dir
 ```
 
-**Terraform mode** — create a workspace, configure the backend, run `terraform init` internally:
+**Terraform mode** — persist/reuse a workspace, configure the backend, run `terraform init`:
 
 ```bash
 tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
 tfstate init s3://my-bucket/prod/terraform.tfstate --terraform -o ./my-workspace
 tfstate init ./terraform.tfstate --terraform --debug
+tfstate init ./terraform.tfstate --terraform --fresh
 ```
 
 After init, stay in the `tfstate` CLI (omit the file argument in connected mode):
@@ -88,16 +90,19 @@ tfstate mv aws_instance.a aws_instance.b --yes      # requires --terraform
 1. Loads state from S3 or a local file
 2. Parses JSON and prints a summary (`--format` controls that summary)
 3. Stores state in the session for later commands
-4. With `-o/--output`, also writes `state.json` into that directory
+4. With `-o/--output`, also writes `state.json` into that directory (directory must be empty)
 
 **Terraform mode** (`--terraform`)
 
 1. Loads state from S3 or a local file
-2. Creates a workspace (`/tmp/tfstate-*/` or `-o/--output`)
-3. Configures the backend (S3 `backend.tf`, or a local state copy) and runs `terraform init`
+2. Resolves a workspace:
+   - default: `~/.cache/tfstate/workspaces/<fingerprint>/` (reused on match)
+   - `-o PATH`: reuse when `.tfstate-backend.json` fingerprint matches; error on mismatch
+   - `--fresh`: new temp dir; leaves the cached workspace untouched
+3. Writes `backend.tf` + `.tfstate-backend.json`, then always runs `terraform init`
 4. Enables connected manipulation via `tfstate rm` / `tfstate mv`
 
-Provider binaries are shared via `TF_PLUGIN_CACHE_DIR`. Details and troubleshooting: [Provider cache](provider-cache.md).
+Provider binaries are shared via `TF_PLUGIN_CACHE_DIR`. Workspace reuse and troubleshooting: [Provider cache](provider-cache.md).
 
 ---
 

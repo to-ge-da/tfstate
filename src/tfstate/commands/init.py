@@ -14,6 +14,16 @@ from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode, set_workspace
 from tfstate.session import save_session
 from tfstate.output import print_init, console
+from tfstate.workspace_cache import (
+    cache_root,
+    cached_workspace_path,
+    fingerprint_local,
+    fingerprint_s3,
+    local_sidecar_metadata,
+    read_sidecar,
+    s3_sidecar_metadata,
+    write_sidecar,
+)
 
 
 def is_s3_uri(path: str) -> bool:
@@ -100,9 +110,7 @@ def build_terraform_env(profile: Optional[str] = None) -> dict:
     existing = env.get("TF_PLUGIN_CACHE_DIR")
     if existing:
         cache_dir = Path(existing)
-        debug.logger.debug(
-            "TF_PLUGIN_CACHE_DIR inherited from environment: %s", cache_dir
-        )
+        debug.logger.debug("TF_PLUGIN_CACHE_DIR inherited from environment: %s", cache_dir)
     else:
         cache_root = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
         cache_dir = Path(cache_root) / "tfstate" / "terraform-plugin-cache"
@@ -184,6 +192,7 @@ def init_local_terraform_backend(local_path: Path, workspace: str) -> tuple[str,
 
 
 def resolve_workspace(output: Optional[str]) -> tuple[str, bool]:
+    """Resolve a workspace for read-only init (-o). Rejects non-empty directories."""
     if output:
         output_path = Path(output).resolve()
         if not output_path.parent.exists():
@@ -204,30 +213,123 @@ def resolve_workspace(output: Optional[str]) -> tuple[str, bool]:
     return tempfile.mkdtemp(prefix="tfstate-"), False
 
 
+def resolve_terraform_workspace(
+    output: Optional[str],
+    fingerprint: str,
+    *,
+    fresh: bool = False,
+) -> tuple[str, bool]:
+    """Resolve a terraform workspace, reusing a persisted cache when possible.
+
+    Returns (path, reused) where reused means an existing matching sidecar was found.
+    """
+    if fresh:
+        path = tempfile.mkdtemp(prefix="tfstate-")
+        debug.logger.debug("Ignoring workspace cache (--fresh): %s", path)
+        return path, False
+
+    if output:
+        output_path = Path(output).resolve()
+        if not output_path.parent.exists():
+            raise ValueError(
+                f"Parent directory of '{output}' does not exist. "
+                "Create it first or choose a different path."
+            )
+        if output_path.exists():
+            if not any(output_path.iterdir()):
+                console.print(f"[yellow]Reusing existing empty directory: {output_path}[/yellow]")
+                return str(output_path), False
+
+            sidecar = read_sidecar(output_path)
+            if sidecar is None:
+                raise ValueError(
+                    f"Workspace directory '{output}' exists and is not empty. "
+                    "Choose a different path, remove it, or use a matching "
+                    "tfstate workspace (with .tfstate-backend.json)."
+                )
+            existing_fp = sidecar.get("fingerprint")
+            if existing_fp != fingerprint:
+                raise ValueError(
+                    f"Workspace directory '{output}' belongs to a different backend "
+                    f"(fingerprint {existing_fp}, expected {fingerprint}). "
+                    "Choose a different path or remove the directory."
+                )
+            debug.logger.debug("Reusing terraform workspace: %s", output_path)
+            return str(output_path), True
+
+        output_path.mkdir()
+        return str(output_path), False
+
+    cache_path = cached_workspace_path(fingerprint)
+    if cache_path.exists():
+        sidecar = read_sidecar(cache_path)
+        if sidecar is not None and sidecar.get("fingerprint") == fingerprint:
+            debug.logger.debug("Reusing cached terraform workspace: %s", cache_path)
+            return str(cache_path), True
+        if any(cache_path.iterdir()) and sidecar is None:
+            raise ValueError(
+                f"Cached workspace '{cache_path}' exists but has no valid "
+                ".tfstate-backend.json. Remove it or pass --fresh."
+            )
+    else:
+        cache_path.mkdir(parents=True, exist_ok=True)
+
+    debug.logger.debug("Creating cached terraform workspace: %s", cache_path)
+    return str(cache_path), False
+
+
+def cleanup_failed_cache_workspace(workspace: str, *, reused: bool) -> None:
+    """Remove a cold-path cache dir left without a sidecar after terraform init fails."""
+    if reused:
+        return
+    path = Path(workspace).resolve()
+    try:
+        root = cache_root().resolve()
+    except OSError:
+        return
+    if path != root and path.is_relative_to(root) and path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+        debug.logger.debug("Removed incomplete cached workspace: %s", path)
+
+
 def init(
     state_path: str,
     profile: Optional[str] = None,
     region: Optional[str] = None,
     terraform: bool = False,
     output: Optional[str] = None,
+    fresh: bool = False,
 ) -> None:
     try:
+        if fresh and not terraform:
+            raise ValueError("--fresh requires --terraform")
+
         debug.logger.debug("Initializing state from: %s", state_path)
         if is_s3_uri(state_path):
             content, source = download_from_s3(state_path, profile, region)
             backend = "S3"
             state = parse_state_json(content)
-            debug.logger.debug("Parsed state: %d resources, serial %d", len(state.resources), state.serial)
+            debug.logger.debug(
+                "Parsed state: %d resources, serial %d", len(state.resources), state.serial
+            )
 
             if terraform:
                 if not check_terraform_installed():
                     raise RuntimeError(
                         "terraform binary not found. Is Terraform installed and in PATH?"
                     )
-                workspace, _ = resolve_workspace(output)
-                workspace, backend_config = init_terraform_backend(
-                    state_path, profile, region, workspace=workspace
-                )
+                fp = fingerprint_s3(state_path, region, profile)
+                workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
+                try:
+                    workspace, backend_config = init_terraform_backend(
+                        state_path, profile, region, workspace=workspace
+                    )
+                except RuntimeError:
+                    cleanup_failed_cache_workspace(workspace, reused=reused)
+                    raise
+                write_sidecar(workspace, s3_sidecar_metadata(fp, state_path, region, profile))
+                if reused:
+                    debug.logger.debug("Warm terraform init completed for %s", workspace)
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
@@ -246,17 +348,29 @@ def init(
             content, source = load_local_file(state_path)
             backend = "local"
             state = parse_state_file(Path(state_path))
-            debug.logger.debug("Parsed local state: %d resources, serial %d", len(state.resources), state.serial)
+            debug.logger.debug(
+                "Parsed local state: %d resources, serial %d",
+                len(state.resources),
+                state.serial,
+            )
 
             if terraform:
                 if not check_terraform_installed():
                     raise RuntimeError(
                         "terraform binary not found. Is Terraform installed and in PATH?"
                     )
-                workspace, _ = resolve_workspace(output)
-                workspace, backend_config = init_local_terraform_backend(
-                    Path(state_path), workspace
-                )
+                fp = fingerprint_local(state_path)
+                workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
+                try:
+                    workspace, backend_config = init_local_terraform_backend(
+                        Path(state_path), workspace
+                    )
+                except RuntimeError:
+                    cleanup_failed_cache_workspace(workspace, reused=reused)
+                    raise
+                write_sidecar(workspace, local_sidecar_metadata(fp, state_path))
+                if reused:
+                    debug.logger.debug("Warm terraform init completed for %s", workspace)
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)

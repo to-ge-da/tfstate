@@ -72,9 +72,11 @@ def resolve_workspace(output: Optional[str]) -> tuple[str, bool]:
 - `-o existing-dir` with `.terraform/` or any file → **error: not empty**
 - Only empty dirs are allowed, defeating reuse of initialized workspaces
 
-## Proposed: auto-persist workspace per backend
+## Layer 3: per-backend cached workspaces (implemented)
 
-Add a **third layer**: per-backend cached workspaces.
+Persisted workspaces under `~/.cache/tfstate/workspaces/<fingerprint>/` so a
+repeat `tfstate init --terraform` against the same backend reuses `.terraform/`
+and `.terraform.lock.hcl`.
 
 ### Layout
 
@@ -83,45 +85,29 @@ Add a **third layer**: per-backend cached workspaces.
 ├── terraform-plugin-cache/          ← global provider binary cache
 │   └── registry.terraform.io/.../
 └── workspaces/
-    └── a3f8c2d1/                    ← fingerprint of s3://bucket/key
+    └── a3f8c2d1/                    ← fingerprint of backend identity
         ├── backend.tf
+        ├── .tfstate-backend.json    ← sidecar (fingerprint + backend identity)
         ├── .terraform/
         ├── .terraform.lock.hcl
-        └── state.json               ← parsed state for quick summary
+        └── terraform.tfstate        ← local backend copy (when applicable)
 ```
 
 Each S3 URI (or local file) maps to a stable fingerprint. On repeat init:
 
 - Fingerprint computed from backend identity
-- Existing workspace detected and **reused** (Terraform sees already-initialized
-  backend + lock file → fast path)
-- `terraform init` runs in the same dir, uses lock file, uses cached binary
-- No state re-download from boto3 (or skip boto3 entirely when `--terraform`)
+- Existing workspace detected via `.tfstate-backend.json` and **reused**
+- `terraform init` always runs (warm path uses lock file + cached binaries)
+- boto3 still downloads state for the init summary (skipping that on warm reuse
+  is a follow-up)
 
-### Init flow comparison
-
-#### Current
-
-```
-tfstate init s3://bucket/key --terraform
-├── boto3: download state (fetch #1)
-├── temp dir /tmp/tfstate-xxxxx (always new)
-├── write backend.tf
-├── terraform init
-│   ├── S3 backend (fetch #2)
-│   ├── resolve providers from registry (no lock file)
-│   ├── write .terraform.lock.hcl
-│   └── symlink provider from global cache
-└── discard on exit
-```
-
-#### Proposed
+### Init flow
 
 ```
 tfstate init s3://bucket/key --terraform   (1st run)
 ├── boto3: download state
 ├── create ~/.cache/tfstate/workspaces/a3f8c2d1/
-├── write backend.tf
+├── write backend.tf + .tfstate-backend.json
 ├── terraform init
 │   ├── S3 backend
 │   ├── resolve from registry
@@ -130,9 +116,9 @@ tfstate init s3://bucket/key --terraform   (1st run)
 └── workspace persisted
 
 tfstate init s3://bucket/key --terraform   (2nd run)
-├── detect existing workspace a3f8c2d1
+├── detect existing workspace a3f8c2d1 (sidecar match)
 ├── reuse ~/.cache/tfstate/workspaces/a3f8c2d1/
-├── (optionally skip boto3 — parse state after init)
+├── boto3: download state (summary; skip deferred)
 ├── terraform init (warm)
 │   ├── S3 backend (~7s)
 │   ├── Using previously-installed hashicorp/aws
@@ -154,45 +140,39 @@ Hash with SHA-256, take first 8 hex chars → directory name.
 | Flag | Behavior |
 |------|----------|
 | *(default)* | Auto-persist under `~/.cache/tfstate/workspaces/<fp>/` |
-| `-o PATH` | Use explicit path; allow reuse if same backend |
-| `--fresh` | Ignore persisted workspace; create new |
+| `-o PATH` | Use explicit path; reuse when sidecar fingerprint matches |
+| `--fresh` | Ignore persisted workspace; use a new temp dir (does **not** delete the cache) |
 
-### `-o` reuse fix
+### `-o` reuse
 
-When `-o PATH` is given and the directory has an existing `.terraform/`,
-compare the backend fingerprint of the existing workspace against the current
-request:
+When `-o PATH` is given and the directory is non-empty:
 
-- **Match** → reuse (no error)
-- **Mismatch** → error with message about conflicting backends
-- **No `.terraform/`** → normal init (current behavior)
+- Sidecar fingerprint **matches** → reuse
+- Sidecar fingerprint **mismatches** → error (conflicting backend)
+- No sidecar → error (not empty / not a tfstate workspace)
 
-## Performance comparison
+### Performance
 
-| Scenario | Current | Proposed |
-|----------|---------|----------|
+| Scenario | Before Layer 3 | With Layer 3 |
+|----------|----------------|--------------|
 | 1st init (cold) | ~2 min | ~2 min (same — cache + lock file built) |
 | 2nd init, same backend | ~2 min | **~7s** (backend init only) |
 | 2nd init, different backend | ~2 min | ~2 min (different workspace) |
-| Workspace disk | Temp → discarded | Persisted in cache dir |
 | `-o` reuse | Error: not empty | Works (same backend) |
 
-## Acceptance criteria
+### Acceptance criteria
 
-- [ ] Second `tfstate init --terraform` against same S3 URI reuses persisted
-      workspace
-- [ ] Second init shows `Using previously-installed` (with `--debug`) and
-      completes in ~backend-init time
-- [ ] Different S3 URI maps to different workspace
-- [ ] `--fresh` forces new workspace (ignores persisted)
-- [ ] `-o` reuses non-empty directory when backend fingerprint matches
-- [ ] Global `TF_PLUGIN_CACHE_DIR` behavior unchanged
-- [ ] `resolve_workspace` updated to accept initialized workspaces
+- [x] Second `tfstate init --terraform` against same backend reuses persisted workspace
+- [x] Different backends map to different workspace directories
+- [x] `--fresh` ignores persisted cache (does not delete it)
+- [x] `-o` reuses when sidecar matches; errors on mismatch
+- [x] Global `TF_PLUGIN_CACHE_DIR` behavior unchanged
+- [x] Sidecar `.tfstate-backend.json` records fingerprint + backend identity
 
-## Out of scope
+### Out of scope / follow-ups
 
-- **`TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`** — not recommended by
-  Terraform; unnecessary if lock file is shared via workspace reuse
-- **Cross-machine cache sync** — Terraform cache is local by design
-- **Automatic cache eviction** — workspace count is bounded by number of unique
-  backends; manual cleanup of `~/.cache/tfstate/workspaces/` is fine
+- **Skip boto3 on warm reuse** — still downloads state for the summary; pull via
+  `terraform state pull` after warm init instead ([#60](https://github.com/to-ge-da/tfstate/issues/60))
+- **`TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`** — not recommended
+- **Cross-machine cache sync** — local by design
+- **Automatic cache eviction** — manual cleanup of `~/.cache/tfstate/workspaces/`
