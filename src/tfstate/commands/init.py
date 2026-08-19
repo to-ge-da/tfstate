@@ -162,9 +162,15 @@ def init_terraform_backend(
     return workspace_path, backend_config
 
 
-def init_local_terraform_backend(local_path: Path, workspace: str) -> tuple[str, dict]:
+def init_local_terraform_backend(
+    local_path: Path, workspace: str, *, reused: bool = False
+) -> tuple[str, dict]:
     workspace_path = Path(workspace)
-    shutil.copy2(local_path, workspace_path / "terraform.tfstate")
+    dest = workspace_path / "terraform.tfstate"
+    if reused and dest.exists():
+        debug.logger.debug("Keeping existing workspace state (warm reuse): %s", dest)
+    else:
+        shutil.copy2(local_path, dest)
 
     env = build_terraform_env()
 
@@ -363,7 +369,7 @@ def init(
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
                 try:
                     workspace, backend_config = init_local_terraform_backend(
-                        Path(state_path), workspace
+                        Path(state_path), workspace, reused=reused
                     )
                 except RuntimeError:
                     cleanup_failed_cache_workspace(workspace, reused=reused)

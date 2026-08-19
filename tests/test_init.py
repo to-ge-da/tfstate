@@ -477,6 +477,26 @@ class TestPersistedTerraformWorkspace:
         assert len(calls) == 2
         assert all(c["cwd"] == str(expected) for c in calls)
 
+    def test_local_terraform_warm_reuse_does_not_overwrite_workspace_state(
+        self, tmp_path: Path, monkeypatch
+    ):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        self._mock_terraform(monkeypatch)
+        fixture = Path(__file__).parent / "fixtures" / "basic.json"
+        first = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert first.exit_code == 0, first.output
+        ws = Path(get_terraform_workspace())
+        dest = ws / "terraform.tfstate"
+        dest.write_text('{"mutated": true}')
+
+        clear_state()
+        clear_session()
+        second = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert second.exit_code == 0, second.output
+        assert dest.read_text() == '{"mutated": true}'
+
     def test_local_terraform_fresh_bypasses_cache(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
         clear_state()

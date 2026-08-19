@@ -9,9 +9,8 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 ## Features
 
 - **State Inspection** — View state metadata, list resources, query by type/module/attributes
-- **Dependency Analysis** — Inspect resource dependencies and dependents
 - **State Diff** — Compare state files across versions
-- **State Manipulation** — Remove, filter, and move resources within state files
+- **State Manipulation** — Remove and move resources (Terraform mode); `filter` is not implemented yet
 - **Offline Analysis** — Work with pulled state JSON files directly
 
 ## Installation

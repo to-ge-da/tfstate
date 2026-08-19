@@ -9,7 +9,7 @@ User guide for `tfstate` commands and shared flags.
 | **Offline** | JSON file passed as an argument | No `terraform` binary required |
 | **Connected** | Session after `tfstate init` | Omit the file argument on later commands |
 
-This page currently documents **init** and **query**. Other commands will be added here over time.
+This page currently documents **init** and **query** in full. Other commands are summarized at the end.
 
 ## Shared flags
 
@@ -188,3 +188,19 @@ tfstate query state.json --type aws_instance --attr tags.Environment=prod --has-
 tfstate init state.json
 tfstate query --type aws_instance
 ```
+
+## Other commands
+
+| Command | Purpose | Notes |
+|---------|---------|--------|
+| `show [file]` | State metadata and resource counts | Offline or connected |
+| `list [file]` | Inventory of addresses | `--type`, `--module` (prefix) |
+| `get [file] ADDRESS` | Resource details | `for_each` keys use `name["key"]` |
+| `diff OLD NEW` | Compare two state files | Offline |
+| `pull [file]` | Print raw state JSON | S3 or local |
+| `rm ADDRESS` | Remove from Terraform state | Requires `init --terraform`; `--yes`, `--no-backup` |
+| `mv SRC DST` | Rename/move in Terraform state | Requires `init --terraform` |
+| `clear` | Wipe the local session cache | Does not change remote state |
+
+`graph` and `filter` are specified but not implemented yet.
+

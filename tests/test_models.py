@@ -1,6 +1,6 @@
 import pytest
 from tfstate.parser import parse_state_data, StateParseError
-from tfstate.models import Resource
+from tfstate.models import Resource, Instance
 
 
 class TestParseStateFile:
@@ -90,3 +90,56 @@ class TestGetResource:
     def test_get_nonexistent_resource(self, basic_state):
         result = basic_state.get_resource("nonexistent.resource")
         assert result is None
+
+
+class TestForEachAddresses:
+    def test_string_index_key(self):
+        state = parse_state_data(
+            {
+                "version": 4,
+                "terraform_version": "1.5.7",
+                "serial": 1,
+                "lineage": "test",
+                "resources": [
+                    {
+                        "mode": "managed",
+                        "type": "aws_s3_bucket",
+                        "name": "logs",
+                        "provider": 'provider["registry.terraform.io/hashicorp/aws"]',
+                        "instances": [
+                            {
+                                "schema_version": 0,
+                                "attributes": {"id": "logs-bucket"},
+                                "index_key": "logs",
+                            },
+                            {
+                                "schema_version": 0,
+                                "attributes": {"id": "backups-bucket"},
+                                "index_key": "backups",
+                            },
+                        ],
+                    }
+                ],
+            }
+        )
+        resource = state.resources[0]
+        assert resource.full_address(0) == 'aws_s3_bucket.logs["logs"]'
+        assert resource.full_address(1) == 'aws_s3_bucket.logs["backups"]'
+        found, idx = state.get_resource('aws_s3_bucket.logs["backups"]')
+        assert idx == 1
+        assert found.instances[idx].attributes["id"] == "backups-bucket"
+        assert state.get_resource("aws_s3_bucket.logs") is None
+
+    def test_numeric_index_key_matches_count(self):
+        resource = Resource(
+            type="aws_instance",
+            name="web",
+            provider="provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances=[
+                Instance(schema_version=0, attributes={"id": "i-0"}, index_key=0),
+                Instance(schema_version=0, attributes={"id": "i-1"}, index_key=1),
+            ],
+        )
+        assert resource.full_address(0) == "aws_instance.web[0]"
+        assert resource.full_address(1) == "aws_instance.web[1]"
+
