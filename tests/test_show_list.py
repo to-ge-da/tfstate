@@ -98,6 +98,35 @@ class TestListCommand:
         assert "aws_subnet" in result.stdout
         assert "aws_instance" not in result.stdout
 
+    def test_list_filter_by_module_includes_child_modules(self, tmp_path):
+        import json
+
+        data = json.loads(BASIC_FIXTURE.read_text())
+        data["resources"].append(
+            {
+                "module": "module.vpc.network",
+                "mode": "managed",
+                "type": "aws_route_table",
+                "name": "public",
+                "provider": 'provider["registry.terraform.io/hashicorp/aws"]',
+                "instances": [
+                    {
+                        "schema_version": 1,
+                        "attributes": {"id": "rtb-0abc"},
+                        "dependencies": [],
+                    }
+                ],
+            }
+        )
+        nested = tmp_path / "nested.json"
+        nested.write_text(json.dumps(data))
+
+        result = runner.invoke(app, ["list", str(nested), "--module", "module.vpc"])
+        assert result.exit_code == 0
+        assert "aws_vpc" in result.stdout
+        assert "aws_route_table" in result.stdout
+        assert "aws_instance" not in result.stdout
+
     def test_list_filter_by_type_no_match(self):
         result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "nonexistent"])
         assert result.exit_code == 0

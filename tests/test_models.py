@@ -1,5 +1,6 @@
 import pytest
 from tfstate.parser import parse_state_data, StateParseError
+from tfstate.models import Resource
 
 
 class TestParseStateFile:
@@ -18,6 +19,28 @@ class TestParseStateFile:
     def test_raises_on_unsupported_version(self):
         with pytest.raises(StateParseError, match="Unsupported state version"):
             parse_state_data({"version": 3})
+
+
+class TestMatchesModule:
+    def _resource(self, module: str | None) -> Resource:
+        return Resource(
+            module=module,
+            type="aws_vpc",
+            name="main",
+            provider="provider[\"registry.terraform.io/hashicorp/aws\"]",
+        )
+
+    def test_exact_module(self):
+        assert self._resource("module.vpc").matches_module("module.vpc")
+
+    def test_child_module_prefix(self):
+        assert self._resource("module.vpc.network").matches_module("module.vpc")
+
+    def test_sibling_prefix_does_not_match(self):
+        assert not self._resource("module.vpc2").matches_module("module.vpc")
+
+    def test_root_module_does_not_match_named_prefix(self):
+        assert not self._resource(None).matches_module("module.vpc")
 
 
 class TestResourceAddress:

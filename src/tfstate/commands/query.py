@@ -181,7 +181,7 @@ def _collect_addresses(
     for resource in state.resources:
         if type is not None and resource.type != type:
             continue
-        if module is not None and resource.module != module:
+        if module is not None and not resource.matches_module(module):
             continue
         for index, instance in enumerate(resource.instances):
             if not _matches_attributes(

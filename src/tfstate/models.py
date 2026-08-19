@@ -29,6 +29,17 @@ class Resource(BaseModel):
             return f"{addr}[{index}]"
         return addr
 
+    def matches_module(self, prefix: str) -> bool:
+        """True if this resource is in `prefix` or a child module of it.
+
+        `--module module.vpc` matches `module.vpc` and `module.vpc.network`,
+        but not `module.vpc2` or the root module.
+        """
+        module = self.module or ""
+        if module == prefix:
+            return True
+        return bool(prefix) and module.startswith(prefix + ".")
+
 
 class StateOutput(BaseModel):
     name: str
