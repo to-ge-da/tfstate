@@ -42,9 +42,9 @@ User-facing docs: [CLI reference](cli.md) · [Workflows](WORKFLOW.md).
 
 Commands operate directly on a JSON state file. No terraform binary required.
 
-Available commands: `show`, `list`, `get`, `query`, `diff`, `pull`
+Available commands: `show`, `list`, `get`, `query`, `diff`, `pull`, `filter`
 
-Not implemented: `graph` (planned), `filter` (planned — [#65](https://github.com/to-ge-da/tfstate/issues/65)).
+Not implemented: `graph` (planned).
 
 ```
 tfstate show state.json
@@ -297,7 +297,7 @@ Resources added: 3
 Resources removed: 1
 ```
 
-### Phase 3: State Manipulation (v0.3.0) — `rm` / `mv` ✅ · `filter` 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65))
+### Phase 3: State Manipulation (v0.3.0) — `rm` / `mv` / `filter` ✅
 
 ⚠️ `rm` and `mv` require `init --terraform`.
 
@@ -338,19 +338,21 @@ Behavior:
 3. Runs `terraform state mv <src> <dst>`
 4. Confirms move
 
-#### `tfstate filter <file> --output <path>` (Offline) 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65)) — not implemented
+#### `tfstate filter <file> --output <path>` (Offline) ✅
 
-Create a new state file with filtered resources (offline only). Use `query` today to *list* matching addresses; `filter` would write a new state file.
+Create a new v4 state file with filtered resources (offline only). Use `query` to *list* matching addresses; `filter` writes a new state file. Resource-level: matching `count` / `for_each` resources keep all instances. Excludes win over includes. Metadata (`serial`, `lineage`, `outputs`, …) is preserved.
 
 ```
 tfstate filter state.json --type aws_instance --output instances.json
 ```
 
 Options:
-- `--type <resource_type>` — Include only this type
-- `--module <module_path>` — Include only this module
-- `--exclude-type <type>` — Exclude this type
-- `--exclude-module <path>` — Exclude this module
+- `--type <resource_type>` — Include only this type (repeatable; OR)
+- `--module <module_path>` — Include only this module path prefix (repeatable; children included)
+- `--exclude-type <type>` — Exclude this type (repeatable; wins over `--type`)
+- `--exclude-module <path>` — Exclude this module path prefix (repeatable; wins over `--module`)
+
+See [CLI reference](cli.md#filter).
 
 ## Data Model
 
@@ -490,11 +492,11 @@ tfstate/
 - [x] Output format options (json, plain) — `--format` / `-f` on each command
 - [x] `--debug` flag — on each command
 
-### Phase 3: State Manipulation (v0.3.0) — `rm` / `mv` done; `filter` not implemented
+### Phase 3: State Manipulation (v0.3.0) ✅
 
 - [x] `rm` command — with backup, confirmation, `init --terraform` enforcement
 - [x] `mv` command — with backup, `init --terraform` enforcement
-- [ ] `filter` command (offline only) — [#65](https://github.com/to-ge-da/tfstate/issues/65)
+- [x] `filter` command (offline only)
 - [x] Safety confirmation workflow (unless `--yes` / `-y`)
 
 ### Phase 4: Polish & Extensions (v1.0.0)
@@ -524,7 +526,7 @@ Currently shipped (see [CLI reference](cli.md)):
 | `cache clear` | Clear cached session state | ✅ |
 | `clear` | Deprecated alias for `cache clear` | ⚠️ Deprecated |
 | `graph` | Resource dependency graph | 📋 Planned |
-| `filter` | Write a filtered state file (offline) | 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65)) |
+| `filter` | Write a filtered state file (offline) | ✅ |
 
 ## Open Questions
 

@@ -60,7 +60,7 @@ Read-only analysis of state JSON files. No `terraform` binary needed.
 | `query` | ✅ Implemented | `tfstate query <file> [--type] [--attr]` — see [CLI reference](cli.md#query) |
 | `graph` | 📋 Planned (#10) | `tfstate graph <file> [--address] [--depth]` |
 | `diff` | ✅ Implemented | `tfstate diff <file1> <file2>` |
-| `filter` | 📋 Planned | `tfstate filter <file> --output <out>` |
+| `filter` | ✅ Implemented | `tfstate filter <file> --output <out>` |
 
 ### Example session (offline)
 
@@ -71,6 +71,9 @@ tfstate pull s3://my-bucket/prod/terraform.tfstate --output prod.json
 # Inspect
 tfstate show prod.json
 tfstate list prod.json --type aws_instance
+
+# Write a subset state file
+tfstate filter prod.json --type aws_instance --output instances.json
 
 # Compare with another version
 tfstate diff prod.json prod_previous.json
@@ -235,11 +238,11 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | #11 | Debug flag | `--debug` on all commands |
 | #13 | Custom workspace (-o) | `init --terraform -o <path>` |
 
-### Phase 3 (v0.3.0) — 📋 Planned
+### Phase 3 (v0.3.0) — ✅ Implemented
 
 | Feature | Command |
 |---------|---------|
-| Safe rm (backup, confirm) | `tfstate rm [--force] <address>` |
+| Safe rm (backup, confirm) | `tfstate rm [--yes] <address>` |
 | Safe mv | `tfstate mv <src> <dst>` |
 | Filter command | `tfstate filter <file> --output <out>` |
 | Confirmation workflow | Built-in safety prompts |
@@ -256,6 +259,7 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | Move a resource | `terraform -chdir=<ws> state mv '<src>' '<dst>'` ¹ | `tfstate mv <src> <dst>` |
 | Find specific resources | `tfstate query [file] --type` ([cli.md](cli.md#query)) | — |
 | Compare two states | `tfstate diff <file1> <file2>` | — |
+| Write a filtered state file | `tfstate filter <file> --output <out>` | — |
 | View dependency tree | N/A | `tfstate graph <file>` |
 
 ¹ Wrap addresses in single quotes when they contain square brackets with quoted keys. This prevents the shell from stripping the inner double quotes. Applies to all `state` subcommands (`show`, `rm`, `mv`, etc.).  

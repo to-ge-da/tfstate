@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from pathlib import Path
 from rich.console import Console
 from typing import Optional
 from tfstate.attrs import format_attr_path, format_attr_value, walk_attributes
@@ -606,3 +607,29 @@ def print_mv(src: str, dst: str, backup_path: str, new_state: State, mv_output: 
     console.print(f"[bold]Resources:[/bold] {len(new_state.resources)} total")
     if mv_output.strip():
         console.print(mv_output.strip())
+
+
+def print_filter(output_path: Path, state: State) -> None:
+    total_resources = len(state.resources)
+    total_instances = sum(len(resource.instances) for resource in state.resources)
+    fmt = get_format()
+    if fmt == "json":
+        print(
+            json.dumps(
+                {
+                    "output": str(output_path),
+                    "resources": total_resources,
+                    "instances": total_instances,
+                },
+                indent=2,
+            )
+        )
+        return
+    if fmt == "plain":
+        print(f"Wrote {total_resources} resources ({total_instances} instances) to {output_path}")
+        return
+
+    console.print(
+        f"[bold green]Wrote {total_resources} resources "
+        f"({total_instances} instances) to {output_path}[/bold green]"
+    )

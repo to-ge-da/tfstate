@@ -13,6 +13,7 @@ from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
 from tfstate.commands.mv import mv as mv_cmd
 from tfstate.commands.cache import clear as cache_clear
+from tfstate.commands.filter import filter_state as filter_cmd
 from tfstate.output import OutputFormat, configure as configure_output
 
 app = typer.Typer(
@@ -190,6 +191,44 @@ def pull_cmd(
     """Download state from S3."""
     configure_globals(debug, format)
     pull(s3_uri, output=output, profile=profile, region=region)
+
+
+@app.command("filter")
+def filter(
+    state_file: Path = typer.Argument(..., help="State file to filter (offline)"),
+    output: Path = typer.Option(
+        ..., "--output", "-o", help="Write filtered v4 state JSON to this path"
+    ),
+    type: Optional[list[str]] = typer.Option(
+        None, "--type", "-t", help="Include resource type (repeatable; OR)"
+    ),
+    module: Optional[list[str]] = typer.Option(
+        None,
+        "--module",
+        "-m",
+        help="Include module path prefix (repeatable; OR; children included)",
+    ),
+    exclude_type: Optional[list[str]] = typer.Option(
+        None, "--exclude-type", help="Exclude resource type (repeatable; wins over --type)"
+    ),
+    exclude_module: Optional[list[str]] = typer.Option(
+        None,
+        "--exclude-module",
+        help="Exclude module path prefix (repeatable; children excluded; wins over --module)",
+    ),
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
+) -> None:
+    """Write a new state file containing only the filtered resources (offline)."""
+    configure_globals(debug, format)
+    filter_cmd(
+        state_file,
+        output,
+        types=type,
+        modules=module,
+        exclude_types=exclude_type,
+        exclude_modules=exclude_module,
+    )
 
 
 @app.command("mv")
