@@ -56,7 +56,7 @@ tfstate get state.json module.vpc.aws_vpc.main
 
 Requires `terraform` binary installed. User must run `init` first to connect to a backend.
 
-Available commands: `show`, `list`, `get`, `query`, `rm`, `mv`, `clear`
+Available commands: `show`, `list`, `get`, `query`, `rm`, `mv`, `cache`
 
 ```
 tfstate init s3://my-bucket/prod/terraform.tfstate
@@ -486,7 +486,7 @@ tfstate/
 - [x] `query` command with filters (including interactive bare query)
 - [ ] `graph` command (tree output)
 - [x] `diff` command
-- [x] `clear` command — drop cached session (`~/.tfstate/`)
+- [x] `cache clear` command — drop cached session (`~/.tfstate/`); `clear` remains as a deprecated alias
 - [x] Output format options (json, plain) — `--format` / `-f` on each command
 - [x] `--debug` flag — on each command
 
@@ -521,7 +521,8 @@ Currently shipped (see [CLI reference](cli.md)):
 | `pull` | Pull state from S3 backend | ✅ |
 | `mv` | Move a resource (requires `init --terraform`) | ✅ |
 | `rm` | Remove a resource (requires `init --terraform`) | ✅ |
-| `clear` | Clear cached session state | ✅ |
+| `cache clear` | Clear cached session state | ✅ |
+| `clear` | Deprecated alias for `cache clear` | ⚠️ Deprecated |
 | `graph` | Resource dependency graph | 📋 Planned |
 | `filter` | Write a filtered state file (offline) | 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65)) |
 

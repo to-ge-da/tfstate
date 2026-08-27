@@ -24,7 +24,8 @@ End-to-end flows (offline vs connected, when to use `--terraform`): [Workflows](
 | [pull](#pull) | Download state JSON from S3 | offline |
 | [mv](#mv) | Move a resource to a new address | connected (`--terraform`) |
 | [rm](#rm) | Remove a resource from state | connected (`--terraform`) |
-| [clear](#clear) | Delete cached session state | session |
+| [cache](#cache) | Manage session cache (`cache clear`) | session |
+| [clear](#clear) | **Deprecated.** Use `cache clear` | session |
 
 There is no `filter` command (planned, [#65](https://github.com/to-ge-da/tfstate/issues/65)). `graph` is also not implemented.
 
@@ -456,9 +457,46 @@ tfstate rm 'module.rds_settings["v15"].aws_db_option_group.option_group' --yes -
 
 ---
 
+## cache
+
+Manage session cache. Subcommands can grow (list/inspect) without overloading a one-shot verb; today only `clear` is implemented.
+
+`cache clear` deletes cached session state (`~/.tfstate/`). It does not modify Terraform backends or workspace caches under `~/.cache/tfstate/`.
+
+### Usage
+
+```bash
+tfstate cache clear
+```
+
+### Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `clear` | Delete cached session state (`~/.tfstate/`) |
+
+### Options
+
+- `--format`, `-f` — Output format (`rich`, `json`, `plain`)
+- `--debug` — Full stack traces
+
+`--format json` prints `{"status": "cleared"}` on stdout (parseable). `plain` and the default `rich` print a confirmation line.
+
+### Examples
+
+```bash
+tfstate cache clear
+tfstate cache clear --format json
+tfstate cache clear --format plain
+```
+
+---
+
 ## clear
 
-Clear cached session state (`~/.tfstate/`). Does not modify Terraform backends or workspace caches under `~/.cache/tfstate/`.
+**Deprecated.** Use [`tfstate cache clear`](#cache) instead.
+
+`tfstate clear` still works during the transition: it performs the same wipe as `cache clear`, and writes a deprecation warning to stderr. Help marks the command as deprecated.
 
 ### Usage
 
