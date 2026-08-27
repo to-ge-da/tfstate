@@ -1,0 +1,69 @@
+{
+  "version": 4,
+  "terraform_version": "1.5.7",
+  "serial": 1,
+  "lineage": "module-prefix",
+  "outputs": {},
+  "resources": [
+    {
+      "module": "module.vpc",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "vpc-main"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.vpc.network",
+      "mode": "managed",
+      "type": "aws_route_table",
+      "name": "public",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "rtb-0abc"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.vpc2",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "other",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "vpc-other"
+          }
+        }
+      ]
+    },
+    {
+      "module": null,
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "bastion",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "id": "i-bastion"
+          }
+        }
+      ]
+    }
+  ]
+}

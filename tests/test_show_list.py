@@ -1,3 +1,4 @@
+import json
 import pytest
 from pathlib import Path
 from typer.testing import CliRunner
@@ -17,6 +18,7 @@ def clear_state_before():
 
 
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
+NESTED_FIXTURE = Path(__file__).parent / "fixtures" / "nested_modules.json"
 
 
 class TestShowCommand:
@@ -97,6 +99,17 @@ class TestListCommand:
         assert "aws_vpc" in result.stdout
         assert "aws_subnet" in result.stdout
         assert "aws_instance" not in result.stdout
+
+    def test_list_filter_by_module_includes_children_excludes_siblings(self):
+        result = runner.invoke(
+            app, ["list", str(NESTED_FIXTURE), "--module", "module.vpc", "--format", "json"]
+        )
+        assert result.exit_code == 0
+        addresses = json.loads(result.stdout)
+        assert "module.vpc.aws_vpc.main" in addresses
+        assert "module.vpc.network.aws_route_table.public" in addresses
+        assert "module.vpc2.aws_vpc.other" not in addresses
+        assert "aws_instance.bastion" not in addresses
 
     def test_list_filter_by_type_no_match(self):
         result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "nonexistent"])
