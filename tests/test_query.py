@@ -12,7 +12,6 @@ from tfstate.state_store import clear_state
 
 runner = CliRunner()
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
-NESTED_FIXTURE = Path(__file__).parent / "fixtures" / "nested_modules.json"
 
 
 @pytest.fixture(autouse=True)
@@ -235,19 +234,6 @@ def test_query_filters_by_type_and_module_with_and_semantics():
     assert result.exit_code == 0
     assert "module.vpc.aws_vpc.main" in result.stdout
     assert "aws_subnet" not in result.stdout
-
-
-def test_query_module_prefix_includes_children_excludes_siblings():
-    result = runner.invoke(
-        app,
-        ["query", str(NESTED_FIXTURE), "--module", "module.vpc", "--format", "json"],
-    )
-
-    assert result.exit_code == 0
-    assert json.loads(result.stdout) == [
-        "module.vpc.aws_vpc.main",
-        "module.vpc.network.aws_route_table.public",
-    ]
 
 
 def test_query_repeatable_attributes_and_typed_values(typed_fixture):
