@@ -6,6 +6,8 @@ A Python CLI tool that wraps `terraform state` commands with a safer, more ergon
 
 Born from the need to quickly debug and fix state issues in production without requiring access to the original Terraform project code.
 
+User-facing docs: [CLI reference](cli.md) · [Workflows](WORKFLOW.md).
+
 ## Goals
 
 ### Primary Goals
@@ -40,7 +42,9 @@ Born from the need to quickly debug and fix state issues in production without r
 
 Commands operate directly on a JSON state file. No terraform binary required.
 
-Available commands: `show`, `list`, `get`, `query`, `graph`, `diff`, `pull`
+Available commands: `show`, `list`, `get`, `query`, `diff`, `pull`
+
+Not implemented: `graph` (planned), `filter` (planned — [#65](https://github.com/to-ge-da/tfstate/issues/65)).
 
 ```
 tfstate show state.json
@@ -52,7 +56,7 @@ tfstate get state.json module.vpc.aws_vpc.main
 
 Requires `terraform` binary installed. User must run `init` first to connect to a backend.
 
-Available commands: `show`, `list`, `get`, `query`, `rm`, `mv`
+Available commands: `show`, `list`, `get`, `query`, `rm`, `mv`, `clear`
 
 ```
 tfstate init s3://my-bucket/prod/terraform.tfstate
@@ -67,7 +71,7 @@ tfstate rm module.vpc.aws_instance.bastion
 |------|-------------|
 | `init` required before `rm` or `mv` | Hard block — error if not initialized |
 | Backup before modification | Automatic `.backup` file created |
-| Confirmation prompt on destructive ops | Required unless `--force` |
+| Confirmation prompt on destructive ops | Required unless `--yes` (`-y`; `--force` is a deprecated alias) |
 | Read operations work without `init` | Only when a JSON file is provided |
 
 ### Dependency: Terraform Binary
@@ -96,7 +100,7 @@ Installation: https://developer.hashicorp.com/terraform/downloads
 | **Direct JSON Parsing** | Terraform state is JSON — no need for binary for reads |
 | **terraform state * delegation** | Connected mode delegates to terraform binary for real state operations |
 | **Read-only by default** | Analysis commands don't modify state, safe to run |
-| **Explicit write flags** | Modifications require `--force` or explicit confirmation |
+| **Explicit write flags** | Modifications require `--yes` or explicit confirmation |
 | **Backup before modify** | Automatic backup creation when modifying state |
 
 ### Backend Support
@@ -147,13 +151,17 @@ tfstate init ./local/terraform.tfstate
 Options:
 - `--profile <name>` — AWS CLI profile
 - `--region <region>` — AWS region
-- `--reconfigure` — Force re-initialization (ignore cached config)
+- `--terraform` — Real Terraform backend workspace (required for `rm` / `mv`)
+- `--output <path>` / `-o` — Custom workspace (terraform mode) or `state.json` directory (read-only)
+- `--fresh` — Ignore the persisted terraform workspace cache (does not delete it)
+
+See [CLI reference — init](cli.md#init) for full flag details.
 
 Behavior:
 1. Authenticates using AWS SDK (supports profile, env vars, IAM role)
 2. Downloads current state snapshot
-3. Stores backend config for subsequent commands
-4. Required before any destructive command (`rm`, `mv`)
+3. Stores backend config / session for subsequent commands
+4. `init --terraform` is required before any destructive command (`rm`, `mv`)
 
 ### Phase 1: State Inspection (v0.1.0) ✅
 
@@ -193,7 +201,8 @@ module.eks.aws_eks_cluster.cluster
 Options:
 - `--type <resource_type>` — Filter by resource type
 - `--module <module_path>` — Filter by module
-- `--format <table|json|plain>` — Output format
+- `--show-all-types` — When a filter matches nothing, show full type/module lists
+- `--format` / `-f` — Output format (`rich`, `json`, `plain`; shared flag)
 
 #### `tfstate pull <s3Uri>`
 
@@ -209,7 +218,7 @@ Options:
 - `--region <region>` — AWS region
 - `--output <path>` — Output file (default: stdout)
 
-### Phase 2: Advanced Inspection (v0.2.0)
+### Phase 2: Advanced Inspection (v0.2.0) ✅ except `graph`
 
 #### `tfstate get [file] <address>`
 
@@ -249,7 +258,7 @@ Options:
 - `--has-attr <key>` — Resources that have this attribute
 - `--missing-attr <key>` — Resources missing this attribute
 
-#### `tfstate graph [file]`
+#### `tfstate graph [file]` 📋 Planned (not implemented)
 
 Show resource dependency graph.
 
@@ -288,43 +297,50 @@ Resources added: 3
 Resources removed: 1
 ```
 
-### Phase 3: State Manipulation (v0.3.0) ⚠️ Requires `init`
+### Phase 3: State Manipulation (v0.3.0) — `rm` / `mv` ✅ · `filter` 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65))
+
+⚠️ `rm` and `mv` require `init --terraform`.
 
 #### `tfstate rm <address>`
 
-Remove resource(s) from real state. Requires `init`.
+Remove resource(s) from real state. Requires `init --terraform`.
 
 ```
 tfstate rm module.vpc.aws_instance.bastion
 ```
 
 Options:
-- `--force` — Skip confirmation prompt
-- `--backup <path>` — Custom backup location (default: `state.json.backup`)
+- `--yes` / `-y` — Skip confirmation prompt (`--force` is a deprecated alias)
+- `--backup <path>` — Custom backup location (default: `<workspace>/terraform.tfstate.backup`)
+- `--no-backup` — Skip backup creation
 
 Behavior:
-1. Verifies `init` has been run
-2. Creates backup of current state
+1. Verifies `init --terraform` has been run
+2. Creates backup of current state (unless `--no-backup`)
 3. Runs `terraform state rm <address>`
 4. Confirms removal
 
 #### `tfstate mv <src> <dst>`
 
-Rename/move a resource within real state. Requires `init`.
+Rename/move a resource within real state. Requires `init --terraform`.
 
 ```
 tfstate mv aws_instance.web module.web.aws_instance.main
 ```
 
+Options:
+- `--yes` / `-y` — Skip confirmation prompt (`--force` is a deprecated alias)
+- `--backup <path>` — Custom backup location (default: `<workspace>/terraform.tfstate.backup`)
+
 Behavior:
-1. Verifies `init` has been run
+1. Verifies `init --terraform` has been run
 2. Creates backup of current state
 3. Runs `terraform state mv <src> <dst>`
 4. Confirms move
 
-#### `tfstate filter <file> --output <path>` (Offline)
+#### `tfstate filter <file> --output <path>` (Offline) 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65)) — not implemented
 
-Create a new state file with filtered resources (offline only).
+Create a new state file with filtered resources (offline only). Use `query` today to *list* matching addresses; `filter` would write a new state file.
 
 ```
 tfstate filter state.json --type aws_instance --output instances.json
@@ -411,7 +427,9 @@ tfstate/
 ├── pyproject.toml           # Project config, dependencies, entry points
 ├── README.md                # Quick start, installation, examples
 ├── docs/
-│   └── SPEC.md              # This document
+│   ├── SPEC.md              # This document
+│   ├── cli.md               # CLI reference
+│   └── WORKFLOW.md          # Offline vs connected workflows
 ├── src/tfstate/
 │   ├── __init__.py
 │   ├── cli.py               # CLI entry point (typer app)
@@ -425,11 +443,9 @@ tfstate/
 │   │   ├── list.py          # list command
 │   │   ├── get.py           # get command
 │   │   ├── query.py         # query command
-│   │   ├── graph.py         # graph command
 │   │   ├── diff.py          # diff command
-│   │   ├── rm.py            # rm command (requires init)
-│   │   ├── filter.py        # filter command (offline)
-│   │   └── mv.py            # mv command (requires init)
+│   │   ├── rm.py            # rm command (requires init --terraform)
+│   │   └── mv.py            # mv command (requires init --terraform)
 │   ├── output.py            # Output formatting (rich tables, etc.)
 │   └── state_manager.py     # Connected state management (init context)
 ├── tests/
@@ -462,7 +478,7 @@ tfstate/
 - [x] `init --terraform` (real Terraform backend)
 - [x] Basic test coverage
 
-### Phase 2: Connected Mode + Advanced Inspection (v0.2.0)
+### Phase 2: Connected Mode + Advanced Inspection (v0.2.0) ✅ except `graph`
 
 - [x] `init` command — connect to real backend, store context
 - [x] Refactor `show` and `list` — work against both offline JSON and connected state
@@ -470,15 +486,16 @@ tfstate/
 - [x] `query` command with filters (including interactive bare query)
 - [ ] `graph` command (tree output)
 - [x] `diff` command
+- [x] `clear` command — drop cached session (`~/.tfstate/`)
 - [x] Output format options (json, plain) — `--format` / `-f` on each command
 - [x] `--debug` flag — on each command
 
-### Phase 3: State Manipulation (v0.3.0)
+### Phase 3: State Manipulation (v0.3.0) — `rm` / `mv` done; `filter` not implemented
 
-- [x] `rm` command — with backup, confirmation, init enforcement
-- [x] `mv` command — with backup, init enforcement
-- [ ] `filter` command (offline only)
-- [x] Safety confirmation workflow (unless `--force` / `--yes`)
+- [x] `rm` command — with backup, confirmation, `init --terraform` enforcement
+- [x] `mv` command — with backup, `init --terraform` enforcement
+- [ ] `filter` command (offline only) — [#65](https://github.com/to-ge-da/tfstate/issues/65)
+- [x] Safety confirmation workflow (unless `--yes` / `-y`)
 
 ### Phase 4: Polish & Extensions (v1.0.0)
 
@@ -490,15 +507,23 @@ tfstate/
 
 ## Implemented Commands
 
-The following commands are currently available in v0.1.0:
+Currently shipped (see [CLI reference](cli.md)):
 
 | Command | Description | Status |
 |---------|-------------|--------|
-| `show` | Display state metadata and summary | ✅ |
-| `list` | List all resources in state | ✅ |
-| `pull` | Pull state from S3 backend | ✅ |
 | `init` | Initialize state from S3 or local file | ✅ |
 | `init --terraform` | Initialize real Terraform backend | ✅ |
+| `show` | Display state metadata and summary | ✅ |
+| `list` | List resources in state | ✅ |
+| `get` | Show detailed resource information | ✅ |
+| `query` | Interactive explore or non-interactive filters | ✅ |
+| `diff` | Compare two state files | ✅ |
+| `pull` | Pull state from S3 backend | ✅ |
+| `mv` | Move a resource (requires `init --terraform`) | ✅ |
+| `rm` | Remove a resource (requires `init --terraform`) | ✅ |
+| `clear` | Clear cached session state | ✅ |
+| `graph` | Resource dependency graph | 📋 Planned |
+| `filter` | Write a filtered state file (offline) | 📋 Planned ([#65](https://github.com/to-ge-da/tfstate/issues/65)) |
 
 ## Open Questions
 
@@ -515,6 +540,8 @@ The following commands are currently available in v0.1.0:
 
 ## References
 
+- [CLI reference](cli.md)
+- [Workflows](WORKFLOW.md)
 - [Terraform State File Format](https://developer.hashicorp.com/terraform/language/state#state-file-format)
 - [Terraform CLI State Commands](https://developer.hashicorp.com/terraform/cli/commands/state)
 - Original prototype: `scripts/tf-init.sh`
