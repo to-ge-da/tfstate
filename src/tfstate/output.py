@@ -215,7 +215,7 @@ def print_list(
     for resource in state.resources:
         if resource_type and resource.type != resource_type:
             continue
-        if module and resource.module != module:
+        if module and not resource.matches_module(module):
             continue
         for i in range(len(resource.instances)):
             matched.append(resource.full_address(i))

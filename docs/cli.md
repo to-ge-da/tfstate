@@ -180,7 +180,7 @@ tfstate list [OPTIONS]
 ### Options
 
 - `--type`, `-t` — Filter by resource type
-- `--module`, `-m` — Filter by module
+- `--module`, `-m` — Filter by module path prefix (`module.vpc` includes `module.vpc.network`, not `module.vpc2`)
 - `--show-all-types` — When a filter matches nothing, show the full type/module lists (default truncates)
 - `--format`, `-f` — Output format (`rich`, `json`, `plain`)
 - `--debug` — Full stack traces
@@ -271,7 +271,7 @@ All filters combine with **AND**. Repeat a flag for multiple conditions.
 | Flag | Meaning | Example |
 |------|---------|---------|
 | `--type`, `-t` | Resource type | `--type aws_instance` |
-| `--module`, `-m` | Module path prefix | `--module module.vpc` |
+| `--module`, `-m` | Module path prefix (`module.vpc` includes `module.vpc.network`, not `module.vpc2`) | `--module module.vpc` |
 | `--attr` | Attribute equals value (`KEY=VALUE`) | `--attr tags.Environment=prod` |
 | `--has-attr` | Attribute path exists | `--has-attr tags.Name` |
 | `--missing-attr` | Attribute path is absent | `--missing-attr tags.Owner` |

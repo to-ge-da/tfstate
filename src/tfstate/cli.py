@@ -92,7 +92,9 @@ def list_cmd(
         None, help="State file (omit to use initialized state)"
     ),
     type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
-    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    module: Optional[str] = typer.Option(
+        None, "--module", "-m", help="Filter by module path prefix"
+    ),
     show_all_types: Annotated[
         bool, typer.Option("--show-all-types", help="Show all available types without truncation")
     ] = False,
@@ -126,7 +128,9 @@ def query(
         None, help="State file (omit to use initialized state)"
     ),
     type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
-    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    module: Optional[str] = typer.Option(
+        None, "--module", "-m", help="Filter by module path prefix"
+    ),
     attr: Optional[list[str]] = typer.Option(
         None, "--attr", help="Filter by attribute KEY=VALUE; repeat for AND"
     ),
