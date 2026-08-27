@@ -303,22 +303,25 @@ Resources removed: 1
 
 #### `tfstate rm <address>`
 
-Remove resource(s) from real state. Requires `init --terraform`.
+Remove resource(s) from real state. Requires `init --terraform`. Offline JSON is not supported.
 
 ```
 tfstate rm module.vpc.aws_instance.bastion
+tfstate rm --interactive
 ```
 
 Options:
+- `--interactive` / `-i` — Checkbox multi-select of instance addresses (TTY required)
 - `--yes` / `-y` — Skip confirmation prompt (`--force` is a deprecated alias)
 - `--backup <path>` — Custom backup location (default: `<workspace>/terraform.tfstate.backup`)
 - `--no-backup` — Skip backup creation
 
 Behavior:
 1. Verifies `init --terraform` has been run
-2. Creates backup of current state (unless `--no-backup`)
-3. Runs `terraform state rm <address>`
-4. Confirms removal
+2. Interactive: checkbox select → preview → confirm (unless `--yes`)
+3. Creates backup of current state (unless `--no-backup`)
+4. Runs `terraform state rm <address>…`
+5. Confirms removal
 
 #### `tfstate mv <src> <dst>`
 

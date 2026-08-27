@@ -24,7 +24,7 @@ End-to-end flows (offline vs connected, when to use `--terraform`): [Workflows](
 | [pull](#pull) | Download state JSON from S3 | offline |
 | [filter](#filter) | Write a filtered state file | offline |
 | [mv](#mv) | Move a resource to a new address | connected (`--terraform`) |
-| [rm](#rm) | Remove a resource from state | connected (`--terraform`) |
+| [rm](#rm) | Remove a resource from state (`ADDRESS` or `--interactive`) | connected (`--terraform`) |
 | [cache](#cache) | Manage session cache (`cache clear`) | session |
 | [clear](#clear) | **Deprecated.** Use `cache clear` | session |
 
@@ -475,21 +475,25 @@ tfstate mv 'module.app["v1"].aws_instance.web' 'module.app["v2"].aws_instance.we
 
 ## rm
 
-Remove a resource from connected state. Requires `tfstate init --terraform`. Creates a backup, then runs `terraform state rm`.
+Remove a resource from connected state. Requires `tfstate init --terraform`. Creates a backup, then runs `terraform state rm`. Offline JSON mode is not supported: `rm` always delegates to the Terraform binary.
+
+`rm ADDRESS` removes one resource. `rm --interactive` opens a checkbox selector for bulk removal.
 
 ### Usage
 
 ```bash
 tfstate rm <address> [OPTIONS]
+tfstate rm --interactive [OPTIONS]
 ```
 
 ### Arguments
 
-- `address` — Resource address to remove
+- `address` — Resource address to remove (required unless `--interactive`)
 
 ### Options
 
-- `--yes`, `-y` — Skip confirmation prompt (default: prompt)
+- `--interactive`, `-i` — Select resources to remove via a checkbox list (TTY required)
+- `--yes`, `-y` — Skip confirmation prompt (default: prompt). In interactive mode, still requires a selection; skips the final confirmation after preview
 - `--backup` — Custom backup path (default: `<workspace>/terraform.tfstate.backup`)
 - `--no-backup` — Skip backup creation
 - `--format`, `-f` — Output format (`rich`, `json`, `plain`)
@@ -499,6 +503,17 @@ tfstate rm <address> [OPTIONS]
 
 Single-quote addresses that contain brackets.
 
+Interactive mode (`--interactive` / `-i`):
+
+- Presents every instance address in state (including `name["key"]` for `for_each` and `name[0]` for `count`)
+- Space toggles checkboxes; Enter confirms the selection
+- Preview lists exactly the addresses that will be removed, then a confirmation prompt
+- Empty state prints a message and exits without changes
+- No selection (or declining confirmation) aborts without changes
+- Outside a usable TTY, `--interactive` exits with an error (`interactive mode requires a terminal`); `TERM=dumb` is also rejected
+- `ADDRESS` cannot be combined with `--interactive`
+- Backup / `--no-backup` / `--yes` behave the same as non-interactive `rm`
+
 ### Examples
 
 ```bash
@@ -506,6 +521,8 @@ tfstate init s3://my-bucket/prod/terraform.tfstate --terraform
 tfstate rm module.vpc.aws_instance.bastion
 tfstate rm module.vpc.aws_instance.bastion --yes
 tfstate rm 'module.rds_settings["v15"].aws_db_option_group.option_group' --yes --no-backup
+tfstate rm --interactive
+tfstate rm --interactive --yes --no-backup
 ```
 
 ---

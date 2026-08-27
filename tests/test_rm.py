@@ -59,6 +59,8 @@ class TestRmHelp:
         assert "--yes" in result.stdout
         assert "-y" in result.stdout
         assert "--backup" in result.stdout
+        assert "--interactive" in result.stdout
+        assert "-i" in result.stdout
         assert "--force" not in result.stdout
 
 
@@ -299,3 +301,253 @@ class TestRmDebug:
 
         assert result.exit_code == 1
         assert "Traceback" in result.output or "unexpected crash" in result.output
+
+
+FOREACH_FIXTURE = Path(__file__).parent / "fixtures" / "foreach.json"
+
+
+def _terraform_rm_cmd(mock_run) -> list[str] | None:
+    for call in mock_run.call_args_list:
+        cmd = call.args[0]
+        if len(cmd) >= 3 and cmd[:3] == ["terraform", "state", "rm"]:
+            return cmd
+    return None
+
+
+def _mock_checkbox(monkeypatch, selected, seen=None):
+    def capture_checkbox(*args, **kwargs):
+        if seen is not None:
+            seen["choices"] = list(kwargs.get("choices", []))
+            seen["kwargs"] = kwargs
+        prompt = MagicMock()
+        prompt.ask.return_value = selected
+        return prompt
+
+    monkeypatch.setattr("tfstate.commands.rm.questionary.checkbox", capture_checkbox)
+
+
+class TestRmInteractive:
+    def test_interactive_non_tty_exits_with_terminal_error(self, terraform_state):
+        result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 1
+        assert "interactive mode requires a terminal" in result.output
+
+    def test_interactive_without_address_is_allowed_in_help(self):
+        result = runner.invoke(app, ["rm", "--help"])
+        assert result.exit_code == 0
+        assert "--interactive" in result.stdout
+
+    def test_rm_without_address_requires_interactive(self):
+        result = runner.invoke(app, ["rm"])
+        assert result.exit_code == 1
+        assert "ADDRESS" in result.output
+        assert "--interactive" in result.output
+
+    def test_interactive_cannot_combine_with_address(self, terraform_state):
+        result = runner.invoke(app, ["rm", "aws_instance.bastion", "--interactive"])
+        assert result.exit_code == 1
+        assert "cannot be combined" in result.output
+
+    def test_interactive_without_any_init(self):
+        result = runner.invoke(app, ["rm", "--interactive"])
+        assert result.exit_code == 1
+        assert "No state loaded" in result.output
+
+    def test_interactive_without_terraform_mode(self):
+        state = parse_state_file(BASIC_FIXTURE)
+        set_state(state, str(BASIC_FIXTURE), "local")
+        result = runner.invoke(app, ["rm", "--interactive"])
+        assert result.exit_code == 1
+        assert "terraform mode" in result.output
+
+    def test_interactive_empty_state_exits_cleanly(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        state, _ = terraform_state
+        state.resources.clear()
+
+        with patch("subprocess.run") as mock_run:
+            result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 0
+        assert "No resources in state" in result.output
+        mock_run.assert_not_called()
+
+    def test_interactive_no_selection_leaves_state_untouched(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        _mock_checkbox(monkeypatch, [])
+
+        with patch("subprocess.run") as mock_run:
+            result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 0
+        assert "No resources selected" in result.output
+        mock_run.assert_not_called()
+
+    def test_interactive_cancel_exits_130(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        _mock_checkbox(monkeypatch, None)
+
+        with patch("subprocess.run") as mock_run:
+            result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 130
+        mock_run.assert_not_called()
+
+    def test_interactive_keyboard_interrupt_exits_130(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+
+        prompt = MagicMock()
+        prompt.ask.side_effect = KeyboardInterrupt
+        monkeypatch.setattr(
+            "tfstate.commands.rm.questionary.checkbox",
+            lambda *args, **kwargs: prompt,
+        )
+
+        with patch("subprocess.run") as mock_run:
+            result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 130
+        mock_run.assert_not_called()
+
+    def test_interactive_term_dumb_errors(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: True)
+
+        result = runner.invoke(app, ["rm", "--interactive"])
+
+        assert result.exit_code == 1
+        assert "TERM=dumb" in result.output
+
+    def test_interactive_select_confirm_removes_selected(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        seen: dict = {}
+        selected = ["module.vpc.aws_vpc.main", "aws_instance.bastion"]
+        _mock_checkbox(monkeypatch, selected, seen=seen)
+
+        state, _ = terraform_state
+        state_json = state.model_dump_json(indent=2)
+        updated_json = state_without("module.vpc.aws_vpc.main")
+
+        mock_pull = MagicMock(returncode=0, stdout=state_json, stderr="")
+        mock_rm = MagicMock(
+            returncode=0,
+            stdout="Successfully removed 2 resource instance(s).\n",
+            stderr="",
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
+            result = runner.invoke(app, ["rm", "--interactive"], input="y\n")
+
+        assert result.exit_code == 0
+        assert seen["choices"] == [
+            "module.vpc.aws_vpc.main",
+            "module.vpc.aws_subnet.public[0]",
+            "module.vpc.aws_subnet.public[1]",
+            "aws_instance.bastion",
+        ]
+        assert "The following resources will be removed" in result.stdout
+        assert "module.vpc.aws_vpc.main" in result.stdout
+        assert "aws_instance.bastion" in result.stdout
+        cmd = _terraform_rm_cmd(mock_run)
+        assert cmd == ["terraform", "state", "rm", *selected]
+
+    def test_interactive_yes_skips_confirm(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        selected = ["aws_instance.bastion"]
+        _mock_checkbox(monkeypatch, selected)
+
+        state, _ = terraform_state
+        state_json = state.model_dump_json(indent=2)
+        updated_json = state_without("aws_instance.bastion")
+
+        mock_pull = MagicMock(returncode=0, stdout=state_json, stderr="")
+        mock_rm = MagicMock(
+            returncode=0, stdout="Removed aws_instance.bastion from state.\n", stderr=""
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
+            result = runner.invoke(app, ["rm", "--interactive", "--yes"])
+
+        assert result.exit_code == 0
+        assert "Resource removed: aws_instance.bastion" in result.stdout
+        assert _terraform_rm_cmd(mock_run) == ["terraform", "state", "rm", "aws_instance.bastion"]
+
+    def test_interactive_confirmation_cancelled(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        _mock_checkbox(monkeypatch, ["aws_instance.bastion"])
+
+        with patch("subprocess.run") as mock_run:
+            result = runner.invoke(app, ["rm", "--interactive"], input="n\n")
+
+        assert result.exit_code == 0
+        assert "Operation cancelled" in result.output
+        mock_run.assert_not_called()
+
+    def test_interactive_foreach_addresses_use_index_key(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        state = parse_state_file(FOREACH_FIXTURE)
+        set_state(state, str(FOREACH_FIXTURE), "local")
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        set_terraform_mode(str(ws_dir), {"backend": "local"})
+
+        seen: dict = {}
+        selected = ['aws_s3_bucket.logs["logs"]', "aws_instance.web[0]"]
+        _mock_checkbox(monkeypatch, selected, seen=seen)
+
+        state_json = state.model_dump_json(indent=2)
+        mock_pull = MagicMock(returncode=0, stdout=state_json, stderr="")
+        mock_rm = MagicMock(
+            returncode=0, stdout="Successfully removed 2 resource instance(s).\n", stderr=""
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=state_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_pull, mock_rm, mock_pull_after]
+            result = runner.invoke(app, ["rm", "--interactive", "--yes"])
+
+        assert result.exit_code == 0
+        assert seen["choices"] == [
+            'aws_s3_bucket.logs["logs"]',
+            'aws_s3_bucket.logs["backups"]',
+            "aws_instance.web[0]",
+            "aws_instance.web[1]",
+        ]
+        assert _terraform_rm_cmd(mock_run) == ["terraform", "state", "rm", *selected]
+        assert 'aws_s3_bucket.logs["logs"]' in result.stdout
+        assert "aws_instance.web[0]" in result.stdout
+
+    def test_interactive_no_backup(self, terraform_state, monkeypatch):
+        monkeypatch.setattr("tfstate.commands.rm._is_tty", lambda: True)
+        monkeypatch.setattr("tfstate.commands.rm._is_dumb_term", lambda: False)
+        _mock_checkbox(monkeypatch, ["aws_instance.bastion"])
+
+        state, workspace = terraform_state
+        updated_json = state_without("aws_instance.bastion")
+        backup_file = Path(workspace) / "terraform.tfstate.backup"
+
+        mock_rm = MagicMock(
+            returncode=0, stdout="Removed aws_instance.bastion from state.\n", stderr=""
+        )
+        mock_pull_after = MagicMock(returncode=0, stdout=updated_json, stderr="")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [mock_rm, mock_pull_after]
+            result = runner.invoke(app, ["rm", "--interactive", "--yes", "--no-backup"])
+
+        assert result.exit_code == 0
+        assert not backup_file.exists()
+        assert _terraform_rm_cmd(mock_run) == ["terraform", "state", "rm", "aws_instance.bastion"]
