@@ -162,9 +162,26 @@ def init_terraform_backend(
     return workspace_path, backend_config
 
 
-def init_local_terraform_backend(local_path: Path, workspace: str) -> tuple[str, dict]:
+def pull_terraform_state(workspace: str) -> str:
+    env = build_terraform_env()
+    result = subprocess.run(
+        ["terraform", "state", "pull"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"terraform state pull failed:\n{result.stderr}")
+    return result.stdout
+
+
+def init_local_terraform_backend(
+    local_path: Path, workspace: str, *, reused: bool = False
+) -> tuple[str, dict]:
     workspace_path = Path(workspace)
-    shutil.copy2(local_path, workspace_path / "terraform.tfstate")
+    if not reused:
+        shutil.copy2(local_path, workspace_path / "terraform.tfstate")
 
     env = build_terraform_env()
 
@@ -363,7 +380,7 @@ def init(
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
                 try:
                     workspace, backend_config = init_local_terraform_backend(
-                        Path(state_path), workspace
+                        Path(state_path), workspace, reused=reused
                     )
                 except RuntimeError:
                     cleanup_failed_cache_workspace(workspace, reused=reused)
@@ -371,6 +388,7 @@ def init(
                 write_sidecar(workspace, local_sidecar_metadata(fp, state_path))
                 if reused:
                     debug.logger.debug("Warm terraform init completed for %s", workspace)
+                    state = parse_state_json(pull_terraform_state(workspace))
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
