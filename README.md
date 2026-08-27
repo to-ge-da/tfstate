@@ -11,8 +11,8 @@ A Python CLI tool for debugging, analyzing, and manipulating Terraform state fil
 - **State Inspection** — View state metadata, list resources, query by type/module/attributes
 - **Dependency Analysis** — Inspect resource dependencies and dependents
 - **State Diff** — Compare state files across versions
-- **State Manipulation** — Remove, filter, and move resources within state files
-- **Offline Analysis** — Work with pulled state JSON files directly
+- **State Manipulation** — Remove and move resources in connected Terraform state (`rm`, `mv`)
+- **Offline Analysis** — Work with pulled state JSON files directly (`pull`, `show`, `list`, `get`, `query`, `diff`)
 
 ## Installation
 
@@ -61,13 +61,15 @@ tfstate diff old.json new.json
 
 ## Documentation
 
-- [CLI reference](docs/cli.md) — Command guide (init and query today; more coming)
+- [CLI reference](docs/cli.md) — All shipped commands, flags, and examples
 - [Workflows](docs/WORKFLOW.md) — End-to-end guides for offline and connected modes
 - [Project Specification](docs/SPEC.md) — Architecture, commands, and implementation plan
 
 ## Status
 
 🚧 **Early Development** — See the [specification](docs/SPEC.md) for planned features and implementation phases.
+
+Not yet implemented: `filter` (write a filtered state file — [#65](https://github.com/to-ge-da/tfstate/issues/65)), `graph`.
 
 ## License
 
