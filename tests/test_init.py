@@ -26,7 +26,7 @@ from tfstate.workspace_cache import (
 )
 from tfstate import debug
 from tfstate.cli import app
-from tfstate.state_store import get_terraform_workspace, clear_state
+from tfstate.state_store import get_state, get_terraform_workspace, clear_state
 from tfstate.session import clear_session
 
 
@@ -440,13 +440,97 @@ class TestTerraformInitPassesCacheEnv:
         assert "Installing hashicorp/null" in caplog.text
 
 
+class TestInitLocalWarmReuseCopy:
+    MUTATED = (
+        '{"version": 4, "terraform_version": "1.5.7", "serial": 99, '
+        '"lineage": "mutated-lineage", "outputs": {}, "resources": []}'
+    )
+
+    def _fake_terraform(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append({"cmd": cmd, "cwd": kwargs.get("cwd")})
+            stdout = ""
+            if cmd[:3] == ["terraform", "state", "pull"]:
+                tfstate = Path(kwargs["cwd"]) / "terraform.tfstate"
+                if tfstate.exists():
+                    stdout = tfstate.read_text()
+            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+        return calls
+
+    def test_cold_init_overwrites_workspace_state(self, tmp_path: Path, monkeypatch):
+        self._fake_terraform(monkeypatch)
+        src = tmp_path / "state.json"
+        src.write_text('{"version": 4, "serial": 1}')
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        dest = ws / "terraform.tfstate"
+        dest.write_text(self.MUTATED)
+
+        init_local_terraform_backend(src, str(ws), reused=False)
+
+        assert dest.read_text() == '{"version": 4, "serial": 1}'
+
+    def test_warm_reuse_does_not_overwrite_mutated_workspace(self, tmp_path: Path, monkeypatch):
+        calls = self._fake_terraform(monkeypatch)
+        src = tmp_path / "state.json"
+        src.write_text('{"version": 4, "serial": 1}')
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        dest = ws / "terraform.tfstate"
+        dest.write_text(self.MUTATED)
+
+        init_local_terraform_backend(src, str(ws), reused=True)
+
+        assert dest.read_text() == self.MUTATED
+        assert [c["cmd"] for c in calls] == [["terraform", "init"]]
+
+    def test_cli_warm_reuse_preserves_mutated_workspace(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        calls = self._fake_terraform(monkeypatch)
+        fixture = tmp_path / "state.json"
+        fixture.write_text((Path(__file__).parent / "fixtures" / "basic.json").read_text())
+
+        first = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert first.exit_code == 0, first.output
+        ws = Path(get_terraform_workspace())
+        dest = ws / "terraform.tfstate"
+        dest.write_text(self.MUTATED)
+
+        clear_state()
+        clear_session()
+        second = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert second.exit_code == 0, second.output
+
+        assert dest.read_text() == self.MUTATED
+        assert "Serial: 99" in second.stdout
+        assert get_state() is not None
+        assert get_state().serial == 99
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
+
+
 class TestPersistedTerraformWorkspace:
     def _mock_terraform(self, monkeypatch):
         calls = []
 
         def fake_run(cmd, *args, **kwargs):
             calls.append({"cmd": cmd, "cwd": kwargs.get("cwd")})
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            stdout = ""
+            if cmd[:3] == ["terraform", "state", "pull"]:
+                tfstate = Path(kwargs["cwd"]) / "terraform.tfstate"
+                if tfstate.exists():
+                    stdout = tfstate.read_text()
+            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
         monkeypatch.setattr(init_module.subprocess, "run", fake_run)
         monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
@@ -474,7 +558,11 @@ class TestPersistedTerraformWorkspace:
         second_ws = get_terraform_workspace()
 
         assert first_ws == second_ws == str(expected)
-        assert len(calls) == 2
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
         assert all(c["cwd"] == str(expected) for c in calls)
 
     def test_local_terraform_fresh_bypasses_cache(self, tmp_path: Path, monkeypatch):
@@ -524,13 +612,17 @@ class TestPersistedTerraformWorkspace:
         ws = tmp_path / "ws"
         ws.mkdir()
         write_sidecar(ws, local_sidecar_metadata(fp, fixture))
+        (ws / "terraform.tfstate").write_text(fixture.read_text())
 
         result = runner.invoke(app, ["init", str(fixture), "--terraform", "-o", str(ws)])
         assert result.exit_code == 0, result.output
         assert get_terraform_workspace() == str(ws.resolve())
-        assert len(calls) == 1
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
         assert calls[0]["cwd"] == str(ws.resolve())
-        assert (ws / "terraform.tfstate").exists()
+        assert (ws / "terraform.tfstate").read_text() == fixture.read_text()
 
     def test_failed_init_removes_poisoned_cache(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
