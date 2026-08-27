@@ -250,19 +250,34 @@ def mv(
 
 @app.command("rm")
 def rm(
-    address: str = typer.Argument(..., help="Resource address to remove"),
+    address: Optional[str] = typer.Argument(None, help="Resource address to remove"),
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")] = False,
     force: Annotated[
         bool, typer.Option("--force", hidden=True, help="Deprecated: use --yes")
     ] = False,
     backup: Optional[str] = typer.Option(None, "--backup", help="Custom backup path"),
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backup creation")] = False,
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--interactive",
+            "-i",
+            help="Select resources to remove via a checkbox list (TTY required)",
+        ),
+    ] = False,
     debug: DebugOption = False,
     format: FormatOption = OutputFormat.RICH,
 ) -> None:
     """Remove a resource from connected state."""
     configure_globals(debug, format)
-    rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
+    rm_cmd(
+        address,
+        yes=yes,
+        force=force,
+        backup=backup,
+        no_backup=no_backup,
+        interactive=interactive,
+    )
 
 
 @cache_app.command("clear")

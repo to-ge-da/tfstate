@@ -545,31 +545,54 @@ def _print_attribute_change(change: dict, rich: bool) -> None:
     _print_diff_line(line, style=style, rich=rich)
 
 
-def print_rm(address: str, backup_path: str, new_state: State, rm_output: str) -> None:
+def print_rm(address: str | list[str], backup_path: str, new_state: State, rm_output: str) -> None:
+    addresses = [address] if isinstance(address, str) else list(address)
     remaining = len(new_state.resources)
     fmt = get_format()
     if fmt == "json":
-        data = {
-            "address": address,
+        data: dict = {
             "backup": backup_path,
             "resources_remaining": remaining,
             "output": rm_output.strip() or None,
         }
+        if len(addresses) == 1:
+            data["address"] = addresses[0]
+        else:
+            data["addresses"] = addresses
         print(json.dumps(data, indent=2, default=str))
         return
     if fmt == "plain":
-        print(f"Resource removed: {address}")
+        _print_rm_addresses(addresses, rich=False)
         print(f"Backup: {backup_path}")
         print(f"Resources remaining: {remaining}")
         if rm_output.strip():
             print(rm_output.strip())
         return
 
-    console.print(f"[bold green]Resource removed: {address}[/bold green]")
+    _print_rm_addresses(addresses, rich=True)
     console.print(f"[bold]Backup:[/bold] {backup_path}")
     console.print(f"[bold]Resources remaining:[/bold] {remaining}")
     if rm_output.strip():
         console.print(rm_output.strip())
+
+
+def _print_rm_addresses(addresses: list[str], *, rich: bool) -> None:
+    if len(addresses) == 1:
+        line = f"Resource removed: {addresses[0]}"
+        if rich:
+            console.print(f"[bold green]{line}[/bold green]")
+        else:
+            print(line)
+        return
+    heading = "Resources removed:"
+    if rich:
+        console.print(f"[bold green]{heading}[/bold green]")
+        for addr in addresses:
+            console.print(f"  - {addr}")
+    else:
+        print(heading)
+        for addr in addresses:
+            print(f"  - {addr}")
 
 
 def print_clear() -> None:
