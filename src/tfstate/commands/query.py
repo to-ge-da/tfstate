@@ -179,9 +179,10 @@ def _collect_addresses(
 ) -> list[str]:
     addresses: list[str] = []
     for resource in state.resources:
-        if type is not None and resource.type != type:
-            continue
-        if module is not None and not resource.matches_module(module):
+        if not resource.selected(
+            types=(type,) if type is not None else (),
+            modules=(module,) if module is not None else (),
+        ):
             continue
         for index, instance in enumerate(resource.instances):
             if not _matches_attributes(

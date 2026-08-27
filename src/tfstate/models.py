@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional, Any, Sequence
 import json
 
 
@@ -52,6 +52,29 @@ class Resource(BaseModel):
             return True
         return bool(prefix) and module.startswith(prefix + ".")
 
+    def selected(
+        self,
+        *,
+        types: Sequence[str] = (),
+        modules: Sequence[str] = (),
+        exclude_types: Sequence[str] = (),
+        exclude_modules: Sequence[str] = (),
+    ) -> bool:
+        """True if this resource passes include filters and is not excluded.
+
+        Includes of the same kind are OR (any `--type` / `--module` matches).
+        Type and module includes combine with AND. Excludes win.
+        """
+        if types and self.type not in types:
+            return False
+        if modules and not any(self.matches_module(prefix) for prefix in modules):
+            return False
+        if exclude_types and self.type in exclude_types:
+            return False
+        if exclude_modules and any(self.matches_module(prefix) for prefix in exclude_modules):
+            return False
+        return True
+
 
 class StateOutput(BaseModel):
     name: str
@@ -95,3 +118,72 @@ class State(BaseModel):
                 by_module[mod] = []
             by_module[mod].append(res)
         return by_module
+
+    def filtered(
+        self,
+        *,
+        types: Sequence[str] = (),
+        modules: Sequence[str] = (),
+        exclude_types: Sequence[str] = (),
+        exclude_modules: Sequence[str] = (),
+    ) -> "State":
+        kept = [
+            resource.model_copy(deep=True)
+            for resource in self.resources
+            if resource.selected(
+                types=types,
+                modules=modules,
+                exclude_types=exclude_types,
+                exclude_modules=exclude_modules,
+            )
+        ]
+        return State(
+            version=self.version,
+            terraform_version=self.terraform_version,
+            serial=self.serial,
+            lineage=self.lineage,
+            outputs={name: output.model_copy(deep=True) for name, output in self.outputs.items()},
+            resources=kept,
+        )
+
+    def to_v4_dict(self) -> dict:
+        return {
+            "version": self.version,
+            "terraform_version": self.terraform_version,
+            "serial": self.serial,
+            "lineage": self.lineage,
+            "outputs": {
+                name: {
+                    "value": output.value,
+                    "sensitive": output.sensitive,
+                    "type": output.type,
+                }
+                for name, output in self.outputs.items()
+            },
+            "resources": [_resource_to_v4(resource) for resource in self.resources],
+        }
+
+
+def _resource_to_v4(resource: Resource) -> dict:
+    data: dict[str, Any] = {}
+    if resource.module:
+        data["module"] = resource.module
+    data["mode"] = resource.mode
+    data["type"] = resource.type
+    data["name"] = resource.name
+    data["provider"] = resource.provider
+    data["instances"] = [_instance_to_v4(instance) for instance in resource.instances]
+    return data
+
+
+def _instance_to_v4(instance: Instance) -> dict:
+    data: dict[str, Any] = {}
+    if instance.index_key is not None:
+        data["index_key"] = instance.index_key
+    data["schema_version"] = instance.schema_version
+    data["attributes"] = instance.attributes
+    if instance.dependencies:
+        data["dependencies"] = instance.dependencies
+    if instance.private is not None:
+        data["private"] = instance.private
+    return data

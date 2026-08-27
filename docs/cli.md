@@ -22,12 +22,13 @@ End-to-end flows (offline vs connected, when to use `--terraform`): [Workflows](
 | [query](#query) | Interactive picker, or non-interactive filters | both |
 | [diff](#diff) | Compare two state files | offline |
 | [pull](#pull) | Download state JSON from S3 | offline |
+| [filter](#filter) | Write a filtered state file | offline |
 | [mv](#mv) | Move a resource to a new address | connected (`--terraform`) |
 | [rm](#rm) | Remove a resource from state | connected (`--terraform`) |
 | [cache](#cache) | Manage session cache (`cache clear`) | session |
 | [clear](#clear) | **Deprecated.** Use `cache clear` | session |
 
-There is no `filter` command (planned, [#65](https://github.com/to-ge-da/tfstate/issues/65)). `graph` is also not implemented.
+There is no `graph` command (planned).
 
 ## Shared flags
 
@@ -379,6 +380,58 @@ tfstate pull <s3-uri> [OPTIONS]
 tfstate pull s3://my-bucket/prod/terraform.tfstate
 tfstate pull s3://my-bucket/prod/terraform.tfstate -o prod.json
 tfstate pull s3://my-bucket/prod/terraform.tfstate --profile my-profile --region eu-west-1
+```
+
+---
+
+## filter
+
+Write a new v4 state JSON file containing only the filtered resources. Offline only: reads a local state file and does not use the `terraform` binary or a session.
+
+Filtering is **resource-level**: a matching `count` / `for_each` resource keeps every instance. Type and module are resource attributes, so instance-level subsetting is out of scope.
+
+### Usage
+
+```bash
+tfstate filter <state-file> --output <path> [OPTIONS]
+```
+
+### Arguments
+
+- `state-file` — Local v4 state JSON to read
+
+### Options
+
+- `--output`, `-o` — Path to write the filtered state JSON (**required**)
+- `--type`, `-t` — Include this resource type (repeatable; OR)
+- `--module`, `-m` — Include this module path prefix (repeatable; OR; children included, same as `list` / `query`)
+- `--exclude-type` — Exclude this resource type (repeatable)
+- `--exclude-module` — Exclude this module path prefix (repeatable; children excluded)
+- `--format`, `-f` — Summary format (`rich`, `json`, `plain`). The written file is always v4 state JSON.
+- `--debug` — Full stack traces
+
+### Include vs exclude
+
+1. If any `--type` flags are set, a resource must match **one** of them.
+2. If any `--module` flags are set, a resource must match **one** of them (prefix: `module.vpc` includes `module.vpc.network`, not `module.vpc2`).
+3. Type and module includes combine with **AND**.
+4. **Excludes win**: a resource matching `--exclude-type` or `--exclude-module` is dropped even if it matched an include.
+5. With no include flags, every resource is a candidate, then excludes apply.
+
+No filters at all copies every resource (identity subset).
+
+### Metadata
+
+The written file keeps `version`, `terraform_version`, `serial`, `lineage`, and `outputs` from the source. Outputs that reference removed resources are kept; resolving them is out of scope. `serial` is not incremented (this is a snapshot subset, not a Terraform apply).
+
+### Examples
+
+```bash
+tfstate filter state.json --type aws_instance --output instances.json
+tfstate filter state.json --module module.vpc --output vpc.json
+tfstate filter state.json --type aws_vpc --type aws_instance --exclude-type aws_vpc -o instances.json
+tfstate filter nested.json --module module.vpc --output vpc-only.json
+tfstate filter state.json --exclude-module module.vpc2 -o no-vpc2.json --format json
 ```
 
 ---

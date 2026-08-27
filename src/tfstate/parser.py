@@ -19,6 +19,10 @@ def parse_state_file(path: Path) -> State:
     return parse_state_data(data)
 
 
+def write_state_file(path: Path, state: State) -> None:
+    path.write_text(json.dumps(state.to_v4_dict(), indent=2) + "\n")
+
+
 def parse_state_json(content: str) -> State:
     try:
         data = json.loads(content)
