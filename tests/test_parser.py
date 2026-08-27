@@ -27,6 +27,17 @@ class TestParseStateData:
         state = parse_state_data(basic_data)
         assert len(state.resources[0].instances) == 0
 
+    def test_parses_string_and_int_index_key(self):
+        path = Path(__file__).parent / "fixtures" / "foreach.json"
+        state = parse_state_file(path)
+        buckets = state.resources[0].instances
+        assert buckets[0].index_key == "logs"
+        assert buckets[1].index_key == "backups"
+        webs = state.resources[1].instances
+        assert webs[0].index_key == 0
+        assert webs[1].index_key == 1
+        assert isinstance(webs[0].index_key, int)
+
 
 class TestParseStateFile:
     def test_parses_fixture_file(self):

@@ -218,7 +218,7 @@ tfstate get <address>
 - `target` — Resource address, or state file when `ADDRESS` is also provided
 - `address` — Resource address when reading an offline state file
 
-Counted resources need an indexed address (`aws_instance.web[0]`). If the address is ambiguous, `get` lists the valid indexes.
+Counted resources need an indexed address (`aws_instance.web[0]`). `for_each` keys use quoted addresses (`aws_s3_bucket.logs["logs"]`). If the address is ambiguous, `get` lists the valid indexes.
 
 ### Options
 

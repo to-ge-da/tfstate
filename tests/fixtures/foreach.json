@@ -1,0 +1,55 @@
+{
+  "version": 4,
+  "terraform_version": "1.5.7",
+  "serial": 1,
+  "lineage": "foreach-index-key",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "logs-bucket",
+            "bucket": "logs"
+          },
+          "index_key": "logs"
+        },
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "backups-bucket",
+            "bucket": "backups"
+          },
+          "index_key": "backups"
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "i-0"
+          },
+          "index_key": 0
+        },
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "i-1"
+          },
+          "index_key": 1
+        }
+      ]
+    }
+  ]
+}

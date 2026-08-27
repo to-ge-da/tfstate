@@ -11,6 +11,7 @@ from tfstate.state_store import clear_state
 
 runner = CliRunner()
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
+FOREACH_FIXTURE = Path(__file__).parent / "fixtures" / "foreach.json"
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +65,30 @@ def test_get_json_preserves_nested_attributes():
     ]
 
 
+def test_get_foreach_string_index_key():
+    result = runner.invoke(
+        app,
+        ["get", str(FOREACH_FIXTURE), 'aws_s3_bucket.logs["backups"]', "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["address"] == 'aws_s3_bucket.logs["backups"]'
+    assert data["attributes"]["id"] == "backups-bucket"
+
+
+def test_get_count_numeric_index_key():
+    result = runner.invoke(
+        app,
+        ["get", str(FOREACH_FIXTURE), "aws_instance.web[1]", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["address"] == "aws_instance.web[1]"
+    assert data["attributes"]["id"] == "i-1"
+
+
 def test_get_plain_indexed_address():
     result = runner.invoke(
         app,
@@ -88,6 +113,15 @@ def test_get_rejects_ambiguous_base_address():
     assert "ambiguous" in result.output
     assert "module.vpc.aws_subnet.public[0]" in result.output
     assert "module.vpc.aws_subnet.public[1]" in result.output
+
+
+def test_get_rejects_ambiguous_foreach_base_address():
+    result = runner.invoke(app, ["get", str(FOREACH_FIXTURE), "aws_s3_bucket.logs"])
+
+    assert result.exit_code == 1
+    assert "ambiguous" in result.output
+    assert 'aws_s3_bucket.logs["logs"]' in result.output
+    assert 'aws_s3_bucket.logs["backups"]' in result.output
 
 
 def test_get_unknown_address_suggests_match():
