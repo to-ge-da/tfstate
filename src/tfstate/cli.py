@@ -12,12 +12,17 @@ from tfstate.commands.pull import pull
 from tfstate.commands.init import init as init_cmd
 from tfstate.commands.rm import rm as rm_cmd
 from tfstate.commands.mv import mv as mv_cmd
-from tfstate.session import clear_session
-from tfstate.output import OutputFormat, configure as configure_output, print_clear
+from tfstate.commands.cache import clear as cache_clear
+from tfstate.output import OutputFormat, configure as configure_output
 
 app = typer.Typer(
     name="tfstate",
     help="A CLI tool for debugging, analyzing, and manipulating Terraform state files",
+)
+cache_app = typer.Typer(
+    name="cache",
+    help="Manage session and workspace cache.",
+    no_args_is_help=True,
 )
 
 DebugOption = Annotated[bool, typer.Option("--debug", help="Show full stack traces")]
@@ -217,18 +222,35 @@ def rm(
     rm_cmd(address, yes=yes, force=force, backup=backup, no_backup=no_backup)
 
 
-@app.command("clear")
+@cache_app.command("clear")
+def cache_clear_cmd(
+    debug: DebugOption = False,
+    format: FormatOption = OutputFormat.RICH,
+) -> None:
+    """Clear cached session state."""
+    configure_globals(debug, format)
+    cache_clear()
+
+
+app.add_typer(cache_app, name="cache")
+
+
+@app.command(
+    "clear",
+    deprecated=True,
+    short_help="Clear cached session state",
+)
 def clear_cmd(
     debug: DebugOption = False,
     format: FormatOption = OutputFormat.RICH,
 ) -> None:
-    """Clear cached session state"""
+    """Clear cached session state (deprecated: use `cache clear`)."""
     configure_globals(debug, format)
-    try:
-        clear_session()
-        print_clear()
-    except Exception as e:
-        debug_module.exit_with_traceback(e)
+    typer.echo(
+        "Warning: 'tfstate clear' is deprecated; use 'tfstate cache clear' instead.",
+        err=True,
+    )
+    cache_clear()
 
 
 def main() -> None:

@@ -192,11 +192,16 @@ class TestShowListHelp:
             "pull": "Download state from S3.",
             "mv": "Move a resource to a new address.",
             "rm": "Remove a resource from connected state.",
+            "cache": "Manage session and workspace cache",
             "clear": "Clear cached session state",
         }
+        help_text = " ".join(
+            "".join(ch if ch.isascii() else " " for ch in result.stdout).split()
+        )
         for command, description in descriptions.items():
             assert command in result.stdout
-            assert description in result.stdout
+            assert description in help_text
+        assert "deprecated" in result.stdout.lower()
 
     def test_show_help(self):
         result = runner.invoke(app, ["show", "--help"])
@@ -210,3 +215,15 @@ class TestShowListHelp:
         assert "--type" in result.stdout
         assert "--module" in result.stdout
         assert "--show-all-types" in result.stdout
+
+    def test_cache_help_lists_clear(self):
+        result = runner.invoke(app, ["cache", "--help"])
+        assert result.exit_code == 0
+        assert "clear" in result.stdout
+        assert "Clear cached session state" in result.stdout
+
+    def test_clear_help_marked_deprecated(self):
+        result = runner.invoke(app, ["clear", "--help"])
+        assert result.exit_code == 0
+        assert "deprecated" in result.stdout.lower()
+        assert "cache clear" in result.stdout

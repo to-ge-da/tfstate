@@ -189,6 +189,7 @@ class TestFormatClear:
         assert result.exit_code == 0
         data = json.loads(result.stdout)
         assert data["status"] == "cleared"
+        assert "deprecated" in result.stderr.lower()
 
     def test_clear_plain(self):
         runner.invoke(app, ["init", str(BASIC_FIXTURE)])
@@ -199,6 +200,28 @@ class TestFormatClear:
     def test_clear_rich_default(self):
         runner.invoke(app, ["init", str(BASIC_FIXTURE)])
         result = runner.invoke(app, ["clear"])
+        assert result.exit_code == 0
+        assert "Session cache cleared" in result.stdout
+
+
+class TestFormatCacheClear:
+    def test_cache_clear_json(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["cache", "clear", "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "cleared"
+        assert "deprecated" not in result.output.lower()
+
+    def test_cache_clear_plain(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["cache", "clear", "--format", "plain"])
+        assert result.exit_code == 0
+        assert "Session cache cleared." in result.stdout
+
+    def test_cache_clear_rich_default(self):
+        runner.invoke(app, ["init", str(BASIC_FIXTURE)])
+        result = runner.invoke(app, ["cache", "clear"])
         assert result.exit_code == 0
         assert "Session cache cleared" in result.stdout
 

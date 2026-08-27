@@ -282,6 +282,8 @@ class TestClearCommand:
         assert result.exit_code == 0
         assert "Session cache cleared" in result.stdout
         assert not SESSION_DIR.exists()
+        assert "deprecated" in result.stderr.lower()
+        assert "cache clear" in result.stderr
 
     def test_clear_command_when_no_cache(self):
         clear_session()
@@ -289,3 +291,36 @@ class TestClearCommand:
         result = runner.invoke(app, ["clear"])
         assert result.exit_code == 0
         assert "Session cache cleared" in result.stdout
+        assert "deprecated" in result.stderr.lower()
+        assert "cache clear" in result.stderr
+
+
+class TestCacheClearCommand:
+    def test_cache_clear_removes_cache(self):
+        state = make_test_state()
+        save_session(state, "s3://bucket/key")
+        assert SESSION_DIR.exists()
+
+        result = runner.invoke(app, ["cache", "clear"])
+        assert result.exit_code == 0
+        assert "Session cache cleared" in result.stdout
+        assert not SESSION_DIR.exists()
+        assert "deprecated" not in result.output.lower()
+
+    def test_cache_clear_when_no_cache(self):
+        clear_session()
+
+        result = runner.invoke(app, ["cache", "clear"])
+        assert result.exit_code == 0
+        assert "Session cache cleared" in result.stdout
+        assert "deprecated" not in result.output.lower()
+
+    def test_cache_clear_json(self):
+        state = make_test_state()
+        save_session(state, "s3://bucket/key")
+
+        result = runner.invoke(app, ["cache", "clear", "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "cleared"
+        assert not SESSION_DIR.exists()
