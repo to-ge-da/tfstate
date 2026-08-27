@@ -12,6 +12,7 @@ from tfstate.state_store import clear_state
 
 runner = CliRunner()
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
+FOREACH_FIXTURE = Path(__file__).parent / "fixtures" / "foreach.json"
 
 
 @pytest.fixture(autouse=True)
@@ -47,6 +48,18 @@ def test_query_json_without_filters_returns_every_instance():
         "module.vpc.aws_subnet.public[0]",
         "module.vpc.aws_subnet.public[1]",
         "aws_instance.bastion",
+    ]
+
+
+def test_query_foreach_and_count_addresses():
+    result = runner.invoke(app, ["query", str(FOREACH_FIXTURE), "--format", "json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == [
+        'aws_s3_bucket.logs["logs"]',
+        'aws_s3_bucket.logs["backups"]',
+        "aws_instance.web[0]",
+        "aws_instance.web[1]",
     ]
 
 

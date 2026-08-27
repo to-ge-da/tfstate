@@ -71,6 +71,7 @@ def parse_resource(data: dict) -> Resource:
             attributes=inst_data.get("attributes") or {},
             dependencies=inst_data.get("dependencies") or [],
             private=inst_data.get("private"),
+            index_key=inst_data.get("index_key"),
         )
         instances.append(inst)
 

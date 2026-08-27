@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Any
+import json
 
 
 class Instance(BaseModel):
@@ -7,6 +8,12 @@ class Instance(BaseModel):
     attributes: dict = Field(default_factory=dict)
     dependencies: list[str] = Field(default_factory=list)
     private: Optional[str] = None
+    index_key: Optional[str | int] = None
+
+
+def format_instance_key(key: str | int) -> str:
+    """Terraform instance suffix: [0] for count, [\"name\"] for for_each."""
+    return f"[{json.dumps(key)}]"
 
 
 class Resource(BaseModel):
@@ -25,6 +32,11 @@ class Resource(BaseModel):
 
     def full_address(self, index: int = 0) -> str:
         addr = self.address
+        if index < 0 or index >= len(self.instances):
+            return addr
+        inst = self.instances[index]
+        if inst.index_key is not None:
+            return f"{addr}{format_instance_key(inst.index_key)}"
         if len(self.instances) > 1:
             return f"{addr}[{index}]"
         return addr
@@ -47,17 +59,13 @@ class State(BaseModel):
 
     def get_resource(self, address: str) -> Optional[tuple[Resource, int]]:
         for res in self.resources:
+            for i, _inst in enumerate(res.instances):
+                if res.full_address(i) == address:
+                    return (res, i)
             if res.address == address:
-                return (res, 0) if len(res.instances) == 1 else None
-            if not address.startswith(f"{res.address}[") or not address.endswith("]"):
-                continue
-            idx_str = address[len(res.address) + 1 : -1]
-            try:
-                idx = int(idx_str)
-                if 0 <= idx < len(res.instances):
-                    return (res, idx)
-            except ValueError:
-                pass
+                if len(res.instances) == 1 and res.instances[0].index_key is None:
+                    return (res, 0)
+                return None
         return None
 
     def resources_by_type(self) -> dict[str, list[Resource]]:

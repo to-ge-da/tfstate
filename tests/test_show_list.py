@@ -1,3 +1,4 @@
+import json
 import pytest
 from pathlib import Path
 from typer.testing import CliRunner
@@ -17,6 +18,7 @@ def clear_state_before():
 
 
 BASIC_FIXTURE = Path(__file__).parent / "fixtures" / "basic.json"
+FOREACH_FIXTURE = Path(__file__).parent / "fixtures" / "foreach.json"
 
 
 class TestShowCommand:
@@ -97,6 +99,16 @@ class TestListCommand:
         assert "aws_vpc" in result.stdout
         assert "aws_subnet" in result.stdout
         assert "aws_instance" not in result.stdout
+
+    def test_list_foreach_and_count_index_keys(self):
+        result = runner.invoke(app, ["list", str(FOREACH_FIXTURE), "--format", "json"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == [
+            'aws_s3_bucket.logs["logs"]',
+            'aws_s3_bucket.logs["backups"]',
+            "aws_instance.web[0]",
+            "aws_instance.web[1]",
+        ]
 
     def test_list_filter_by_type_no_match(self):
         result = runner.invoke(app, ["list", str(BASIC_FIXTURE), "--type", "nonexistent"])
