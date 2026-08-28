@@ -26,7 +26,7 @@ from tfstate.workspace_cache import (
 )
 from tfstate import debug
 from tfstate.cli import app
-from tfstate.state_store import get_state, get_terraform_workspace, clear_state
+from tfstate.state_store import get_state, get_state_source, get_terraform_workspace, clear_state
 from tfstate.session import clear_session
 
 
@@ -518,6 +518,50 @@ class TestInitLocalWarmReuseCopy:
             ["terraform", "state", "pull"],
         ]
 
+    def test_cli_warm_pull_failure_falls_back_to_local_file(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        fail_pull = {"value": False}
+        calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append({"cmd": cmd, "cwd": kwargs.get("cwd")})
+            stdout = ""
+            if cmd[:3] == ["terraform", "state", "pull"]:
+                if fail_pull["value"]:
+                    return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="pull failed")
+                tfstate = Path(kwargs["cwd"]) / "terraform.tfstate"
+                if tfstate.exists():
+                    stdout = tfstate.read_text()
+            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+
+        fixture = tmp_path / "state.json"
+        fixture.write_text((Path(__file__).parent / "fixtures" / "basic.json").read_text())
+
+        first = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert first.exit_code == 0, first.output
+        ws = Path(get_terraform_workspace())
+        (ws / "terraform.tfstate").write_text(self.MUTATED)
+
+        clear_state()
+        clear_session()
+        fail_pull["value"] = True
+        second = runner.invoke(app, ["init", str(fixture), "--terraform"])
+        assert second.exit_code == 0, second.output
+        assert "Serial: 42" in second.stdout
+        assert get_state() is not None
+        assert get_state().serial == 42
+        assert (ws / "terraform.tfstate").read_text() == self.MUTATED
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
+
 
 class TestPersistedTerraformWorkspace:
     def _mock_terraform(self, monkeypatch):
@@ -666,3 +710,230 @@ class TestPersistedTerraformWorkspace:
         result = runner.invoke(app, ["init", str(fixture), "--fresh"])
         assert result.exit_code == 1
         assert "--fresh requires --terraform" in result.output
+
+
+class TestS3WarmReuseSkipsBoto3:
+    URI = "s3://bucket/prod/terraform.tfstate"
+
+    def _fixture_json(self) -> str:
+        return (Path(__file__).parent / "fixtures" / "basic.json").read_text()
+
+    def _patch_boto3(self, monkeypatch, payloads: list[str | None]):
+        get_object_calls = []
+
+        class FakeBody:
+            def __init__(self, data: bytes):
+                self._data = data
+
+            def read(self):
+                return self._data
+
+        class FakeS3Client:
+            def get_object(self, Bucket, Key):
+                idx = len(get_object_calls)
+                get_object_calls.append({"Bucket": Bucket, "Key": Key})
+                if idx >= len(payloads):
+                    raise RuntimeError("unexpected get_object")
+                payload = payloads[idx]
+                if payload is None:
+                    raise Exception("NoSuchKey")
+                return {"Body": FakeBody(payload.encode("utf-8"))}
+
+        class FakeSession:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def client(self, _name):
+                return FakeS3Client()
+
+        monkeypatch.setattr(init_module.boto3, "Session", FakeSession)
+        return get_object_calls
+
+    def _patch_terraform(self, monkeypatch, *, pull_stdout: str = "", fail_pull=None):
+        calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append({"cmd": cmd, "cwd": kwargs.get("cwd"), "env": kwargs.get("env")})
+            if cmd[:3] == ["terraform", "state", "pull"]:
+                if fail_pull is not None and fail_pull["value"]:
+                    return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="pull failed")
+                return subprocess.CompletedProcess(cmd, 0, stdout=pull_stdout, stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(init_module.subprocess, "run", fake_run)
+        monkeypatch.setattr(init_module, "check_terraform_installed", lambda: True)
+        return calls
+
+    def test_cold_s3_terraform_uses_get_object_not_state_pull(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        get_object_calls = self._patch_boto3(monkeypatch, [payload])
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload)
+
+        result = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert result.exit_code == 0, result.output
+        assert get_object_calls == [{"Bucket": "bucket", "Key": "prod/terraform.tfstate"}]
+        assert [c["cmd"] for c in calls] == [["terraform", "init"]]
+        assert "Serial: 42" in result.stdout
+        assert get_state() is not None
+        assert get_state().serial == 42
+        assert get_state_source() == self.URI
+
+    def test_warm_s3_reuse_skips_get_object(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        get_object_calls = self._patch_boto3(monkeypatch, [payload])
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload)
+
+        first = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert first.exit_code == 0, first.output
+        assert len(get_object_calls) == 1
+        first_ws = get_terraform_workspace()
+
+        clear_state()
+        clear_session()
+        second = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert second.exit_code == 0, second.output
+        assert len(get_object_calls) == 1
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
+        assert "Serial: 42" in second.stdout
+        assert "Resources: 3" in second.stdout
+        assert get_state() is not None
+        assert get_state().serial == 42
+        assert get_state_source() == self.URI
+        assert get_terraform_workspace() == first_ws
+
+    def test_output_match_skips_get_object(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        get_object_calls = self._patch_boto3(monkeypatch, [payload])
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload)
+
+        fp = fingerprint_s3(self.URI, "us-east-1", None)
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        write_sidecar(ws, s3_sidecar_metadata(fp, self.URI, "us-east-1", None))
+
+        result = runner.invoke(
+            app, ["init", self.URI, "--terraform", "--region", "us-east-1", "-o", str(ws)]
+        )
+        assert result.exit_code == 0, result.output
+        assert get_object_calls == []
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
+        assert "Serial: 42" in result.stdout
+        assert get_state() is not None
+        assert get_state().serial == 42
+        assert get_terraform_workspace() == str(ws.resolve())
+
+    def test_fresh_still_uses_get_object(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        get_object_calls = self._patch_boto3(monkeypatch, [payload, payload])
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload)
+
+        first = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert first.exit_code == 0, first.output
+        cached = get_terraform_workspace()
+
+        clear_state()
+        clear_session()
+        fresh = runner.invoke(
+            app, ["init", self.URI, "--terraform", "--region", "us-east-1", "--fresh"]
+        )
+        assert fresh.exit_code == 0, fresh.output
+        assert len(get_object_calls) == 2
+        assert [c["cmd"] for c in calls] == [["terraform", "init"], ["terraform", "init"]]
+        assert get_terraform_workspace() != cached
+        assert "tfstate-" in get_terraform_workspace()
+
+    def test_warm_pull_failure_falls_back_to_boto3(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        fallback = payload.replace('"serial": 42', '"serial": 77')
+        get_object_calls = self._patch_boto3(monkeypatch, [payload, fallback])
+        fail_pull = {"value": False}
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload, fail_pull=fail_pull)
+
+        first = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert first.exit_code == 0, first.output
+        assert len(get_object_calls) == 1
+
+        clear_state()
+        clear_session()
+        fail_pull["value"] = True
+        second = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert second.exit_code == 0, second.output
+        assert len(get_object_calls) == 2
+        assert [c["cmd"] for c in calls] == [
+            ["terraform", "init"],
+            ["terraform", "init"],
+            ["terraform", "state", "pull"],
+        ]
+        assert "Serial: 77" in second.stdout
+        assert get_state() is not None
+        assert get_state().serial == 77
+
+    def test_warm_pull_and_boto3_failure_errors_clearly(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        get_object_calls = self._patch_boto3(monkeypatch, [payload, None])
+        fail_pull = {"value": False}
+        self._patch_terraform(monkeypatch, pull_stdout=payload, fail_pull=fail_pull)
+
+        first = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert first.exit_code == 0, first.output
+
+        clear_state()
+        clear_session()
+        fail_pull["value"] = True
+        second = runner.invoke(app, ["init", self.URI, "--terraform", "--region", "us-east-1"])
+        assert second.exit_code == 1
+        assert "not found" in second.output or "Failed to download" in second.output
+        assert len(get_object_calls) == 2
+
+    def test_warm_pull_passes_aws_profile(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+        clear_state()
+        clear_session()
+        payload = self._fixture_json()
+        self._patch_boto3(monkeypatch, [payload])
+        calls = self._patch_terraform(monkeypatch, pull_stdout=payload)
+
+        args = [
+            "init",
+            self.URI,
+            "--terraform",
+            "--region",
+            "us-east-1",
+            "--profile",
+            "my-profile",
+        ]
+        first = runner.invoke(app, args)
+        assert first.exit_code == 0, first.output
+
+        clear_state()
+        clear_session()
+        second = runner.invoke(app, args)
+        assert second.exit_code == 0, second.output
+        pull_calls = [c for c in calls if c["cmd"] == ["terraform", "state", "pull"]]
+        assert len(pull_calls) == 1
+        assert pull_calls[0]["env"]["AWS_PROFILE"] == "my-profile"
