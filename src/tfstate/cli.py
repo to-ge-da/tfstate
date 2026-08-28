@@ -14,6 +14,7 @@ from tfstate.commands.rm import rm as rm_cmd
 from tfstate.commands.mv import mv as mv_cmd
 from tfstate.commands.cache import clear as cache_clear
 from tfstate.commands.filter import filter_state as filter_cmd
+from tfstate.commands.graph import GraphFormat, graph as graph_cmd
 from tfstate.output import OutputFormat, configure as configure_output
 
 app = typer.Typer(
@@ -163,6 +164,28 @@ def query(
         missing_attrs=missing_attr,
         interactive=interactive,
     )
+
+
+@app.command("graph")
+def graph(
+    state_file: Optional[Path] = typer.Argument(
+        None, help="State file (omit to use initialized state)"
+    ),
+    address: Optional[str] = typer.Option(
+        None, "--address", help="Show the dependent subtree from this resource"
+    ),
+    depth: Optional[int] = typer.Option(
+        None, "--depth", help="Limit descendant depth (0 = the root node only)"
+    ),
+    graph_format: Annotated[
+        GraphFormat,
+        typer.Option("--format", "-f", help="Output format: tree, dot, json"),
+    ] = GraphFormat.TREE,
+    debug: DebugOption = False,
+) -> None:
+    """Show the resource dependency tree (dependents as children)."""
+    debug_module.configure(debug)
+    graph_cmd(state_file, address=address, depth=depth, format=graph_format)
 
 
 @app.command("diff")

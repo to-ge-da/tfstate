@@ -42,9 +42,7 @@ User-facing docs: [CLI reference](cli.md) · [Workflows](WORKFLOW.md).
 
 Commands operate directly on a JSON state file. No terraform binary required.
 
-Available commands: `show`, `list`, `get`, `query`, `diff`, `pull`, `filter`
-
-Not implemented: `graph` (planned).
+Available commands: `show`, `list`, `get`, `query`, `graph`, `diff`, `pull`, `filter`
 
 ```
 tfstate show state.json
@@ -56,7 +54,7 @@ tfstate get state.json module.vpc.aws_vpc.main
 
 Requires `terraform` binary installed. User must run `init` first to connect to a backend.
 
-Available commands: `show`, `list`, `get`, `query`, `rm`, `mv`, `cache`
+Available commands: `show`, `list`, `get`, `query`, `graph`, `rm`, `mv`, `cache`
 
 ```
 tfstate init s3://my-bucket/prod/terraform.tfstate
@@ -218,7 +216,7 @@ Options:
 - `--region <region>` — AWS region
 - `--output <path>` — Output file (default: stdout)
 
-### Phase 2: Advanced Inspection (v0.2.0) ✅ except `graph`
+### Phase 2: Advanced Inspection (v0.2.0) ✅
 
 #### `tfstate get [file] <address>`
 
@@ -258,9 +256,9 @@ Options:
 - `--has-attr <key>` — Resources that have this attribute
 - `--missing-attr <key>` — Resources missing this attribute
 
-#### `tfstate graph [file]` 📋 Planned (not implemented)
+#### `tfstate graph [file]`
 
-Show resource dependency graph.
+Show resource dependency graph. Dependents are children.
 
 ```
 module.vpc.aws_vpc.main
@@ -274,7 +272,7 @@ module.vpc.aws_vpc.main
 Options:
 - `--address <address>` — Show graph from specific resource
 - `--depth <n>` — Limit graph depth
-- `--format <tree|dot|json>` — Output format
+- `--format <tree|dot|json>` — Output format (`tree` is the default Rich Unicode tree)
 
 #### `tfstate diff <file1> <file2>`
 
@@ -483,13 +481,13 @@ tfstate/
 - [x] `init --terraform` (real Terraform backend)
 - [x] Basic test coverage
 
-### Phase 2: Connected Mode + Advanced Inspection (v0.2.0) ✅ except `graph`
+### Phase 2: Connected Mode + Advanced Inspection (v0.2.0) ✅
 
 - [x] `init` command — connect to real backend, store context
 - [x] Refactor `show` and `list` — work against both offline JSON and connected state
 - [x] `get` command — detailed resource view
 - [x] `query` command with filters (including interactive bare query)
-- [ ] `graph` command (tree output)
+- [x] `graph` command (tree, Graphviz DOT, JSON; cycles warned)
 - [x] `diff` command
 - [x] `cache clear` command — drop cached session (`~/.tfstate/`); `clear` remains as a deprecated alias
 - [x] Output format options (json, plain) — `--format` / `-f` on each command
@@ -506,7 +504,7 @@ tfstate/
 
 - [ ] Comprehensive test coverage
 - [ ] Documentation
-- [ ] Graphviz DOT output for graph
+- [x] Graphviz DOT output for graph
 - [ ] Performance optimization for large states
 - [ ] GCS backend integration
 
@@ -528,7 +526,7 @@ Currently shipped (see [CLI reference](cli.md)):
 | `rm` | Remove a resource (requires `init --terraform`) | ✅ |
 | `cache clear` | Clear cached session state | ✅ |
 | `clear` | Deprecated alias for `cache clear` | ⚠️ Deprecated |
-| `graph` | Resource dependency graph | 📋 Planned |
+| `graph` | Resource dependency graph | ✅ |
 | `filter` | Write a filtered state file (offline) | ✅ |
 
 ## Open Questions
