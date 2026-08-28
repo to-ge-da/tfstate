@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from rich.status import Status
 
 from tfstate import debug
+from tfstate.models import State
 from tfstate.parser import parse_state_file, parse_state_json, StateParseError
 from tfstate.state_store import set_state, set_terraform_mode, set_workspace
 from tfstate.session import save_session
@@ -162,8 +163,8 @@ def init_terraform_backend(
     return workspace_path, backend_config
 
 
-def pull_terraform_state(workspace: str) -> str:
-    env = build_terraform_env()
+def pull_terraform_state(workspace: str, profile: Optional[str] = None) -> str:
+    env = build_terraform_env(profile)
     result = subprocess.run(
         ["terraform", "state", "pull"],
         cwd=workspace,
@@ -174,6 +175,28 @@ def pull_terraform_state(workspace: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"terraform state pull failed:\n{result.stderr}")
     return result.stdout
+
+
+def load_warm_init_state(
+    workspace: str,
+    state_path: str,
+    *,
+    from_s3: bool,
+    profile: Optional[str] = None,
+    region: Optional[str] = None,
+) -> tuple[State, str]:
+    try:
+        content = pull_terraform_state(workspace, profile=profile)
+        state = parse_state_json(content)
+        source = state_path if from_s3 else str(Path(state_path).resolve())
+        return state, source
+    except (RuntimeError, StateParseError) as e:
+        debug.logger.debug("terraform state pull failed after warm init, falling back: %s", e)
+        if from_s3:
+            content, source = download_from_s3(state_path, profile, region)
+            return parse_state_json(content), source
+        _, source = load_local_file(state_path)
+        return parse_state_file(Path(state_path)), source
 
 
 def init_local_terraform_backend(
@@ -323,12 +346,7 @@ def init(
 
         debug.logger.debug("Initializing state from: %s", state_path)
         if is_s3_uri(state_path):
-            content, source = download_from_s3(state_path, profile, region)
             backend = "S3"
-            state = parse_state_json(content)
-            debug.logger.debug(
-                "Parsed state: %d resources, serial %d", len(state.resources), state.serial
-            )
 
             if terraform:
                 if not check_terraform_installed():
@@ -337,6 +355,14 @@ def init(
                     )
                 fp = fingerprint_s3(state_path, region, profile)
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
+                if not reused:
+                    content, source = download_from_s3(state_path, profile, region)
+                    state = parse_state_json(content)
+                    debug.logger.debug(
+                        "Parsed state: %d resources, serial %d",
+                        len(state.resources),
+                        state.serial,
+                    )
                 try:
                     workspace, backend_config = init_terraform_backend(
                         state_path, profile, region, workspace=workspace
@@ -347,12 +373,25 @@ def init(
                 write_sidecar(workspace, s3_sidecar_metadata(fp, state_path, region, profile))
                 if reused:
                     debug.logger.debug("Warm terraform init completed for %s", workspace)
+                    state, source = load_warm_init_state(
+                        workspace, state_path, from_s3=True, profile=profile, region=region
+                    )
+                    debug.logger.debug(
+                        "Parsed state: %d resources, serial %d",
+                        len(state.resources),
+                        state.serial,
+                    )
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
                 save_session(state, source, backend, terraform_mode=True, workspace=workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
+                content, source = download_from_s3(state_path, profile, region)
+                state = parse_state_json(content)
+                debug.logger.debug(
+                    "Parsed state: %d resources, serial %d", len(state.resources), state.serial
+                )
                 set_state(state, source, backend)
                 ws = None
                 if output:
@@ -362,14 +401,7 @@ def init(
                 save_session(state, source, backend, workspace=ws)
                 print_init(state, source, backend, workspace=ws)
         else:
-            content, source = load_local_file(state_path)
             backend = "local"
-            state = parse_state_file(Path(state_path))
-            debug.logger.debug(
-                "Parsed local state: %d resources, serial %d",
-                len(state.resources),
-                state.serial,
-            )
 
             if terraform:
                 if not check_terraform_installed():
@@ -378,6 +410,14 @@ def init(
                     )
                 fp = fingerprint_local(state_path)
                 workspace, reused = resolve_terraform_workspace(output, fp, fresh=fresh)
+                if not reused:
+                    _, source = load_local_file(state_path)
+                    state = parse_state_file(Path(state_path))
+                    debug.logger.debug(
+                        "Parsed local state: %d resources, serial %d",
+                        len(state.resources),
+                        state.serial,
+                    )
                 try:
                     workspace, backend_config = init_local_terraform_backend(
                         Path(state_path), workspace, reused=reused
@@ -388,13 +428,27 @@ def init(
                 write_sidecar(workspace, local_sidecar_metadata(fp, state_path))
                 if reused:
                     debug.logger.debug("Warm terraform init completed for %s", workspace)
-                    state = parse_state_json(pull_terraform_state(workspace))
+                    state, source = load_warm_init_state(
+                        workspace, state_path, from_s3=False, profile=profile, region=region
+                    )
+                    debug.logger.debug(
+                        "Parsed local state: %d resources, serial %d",
+                        len(state.resources),
+                        state.serial,
+                    )
                 set_terraform_mode(workspace, backend_config)
                 set_state(state, source, backend)
                 set_workspace(workspace)
                 save_session(state, source, backend, terraform_mode=True, workspace=workspace)
                 print_init(state, source, backend, terraform_mode=True, workspace=workspace)
             else:
+                content, source = load_local_file(state_path)
+                state = parse_state_file(Path(state_path))
+                debug.logger.debug(
+                    "Parsed local state: %d resources, serial %d",
+                    len(state.resources),
+                    state.serial,
+                )
                 set_state(state, source, backend)
                 ws = None
                 if output:
