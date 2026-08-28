@@ -20,6 +20,7 @@ End-to-end flows (offline vs connected, when to use `--terraform`): [Workflows](
 | [list](#list) | List resource addresses | both |
 | [get](#get) | Detailed view of one resource | both |
 | [query](#query) | Interactive picker, or non-interactive filters | both |
+| [graph](#graph) | Resource dependency tree | both |
 | [diff](#diff) | Compare two state files | offline |
 | [pull](#pull) | Download state JSON from S3 | offline |
 | [filter](#filter) | Write a filtered state file | offline |
@@ -27,8 +28,6 @@ End-to-end flows (offline vs connected, when to use `--terraform`): [Workflows](
 | [rm](#rm) | Remove a resource from state (`ADDRESS` or `--interactive`) | connected (`--terraform`) |
 | [cache](#cache) | Manage session cache (`cache clear`) | session |
 | [clear](#clear) | **Deprecated.** Use `cache clear` | session |
-
-There is no `graph` command (planned).
 
 ## Shared flags
 
@@ -319,6 +318,50 @@ tfstate query state.json --type aws_instance --attr tags.Environment=prod --has-
 # Connected mode after init
 tfstate init state.json
 tfstate query --type aws_instance
+```
+
+---
+
+## graph
+
+Show the resource dependency tree. Dependents are children of the resources they depend on.
+
+`--format` / `-f` on this command is `tree` (default, Rich Unicode tree), `dot` (Graphviz), or `json` — not the shared `rich` / `json` / `plain` set.
+
+### Usage
+
+```bash
+# Offline
+tfstate graph <state-file> [OPTIONS]
+
+# Connected (after init)
+tfstate graph [OPTIONS]
+```
+
+### Arguments
+
+- `state-file` — State file (omit to use initialized state)
+
+### Options
+
+- `--address` — Show the dependent subtree from this resource
+- `--depth` — Limit descendant depth (`0` = the starting node only)
+- `--format`, `-f` — Output format (`tree`, `dot`, `json`)
+- `--debug` — Full stack traces
+
+Cycles are truncated and reported as warnings on stderr. The tree still includes the looping address marked `(cycle)`.
+
+### Examples
+
+```bash
+tfstate graph state.json
+tfstate graph state.json --address module.vpc.aws_vpc.main
+tfstate graph state.json --depth 2
+tfstate graph state.json --format json
+tfstate graph state.json --format dot
+
+tfstate init ./terraform.tfstate
+tfstate graph --address aws_instance.bastion
 ```
 
 ---

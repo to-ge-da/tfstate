@@ -58,7 +58,7 @@ Read-only analysis of state JSON files. No `terraform` binary needed.
 | `init` | ✅ Implemented | `tfstate init <file>` — parses and stores in memory |
 | `get` | ✅ Implemented | `tfstate get <file> <address>` |
 | `query` | ✅ Implemented | `tfstate query <file> [--type] [--attr]` — see [CLI reference](cli.md#query) |
-| `graph` | 📋 Planned (#10) | `tfstate graph <file> [--address] [--depth]` |
+| `graph` | ✅ Implemented | `tfstate graph <file> [--address] [--depth] [--format tree\|dot\|json]` |
 | `diff` | ✅ Implemented | `tfstate diff <file1> <file2>` |
 | `filter` | ✅ Implemented | `tfstate filter <file> --output <out>` |
 
@@ -153,7 +153,7 @@ tfstate query --has-attr tags.Name
 tfstate query --missing-attr tags.Owner
 
 # Resource dependency graph
-tfstate graph state.json --address aws_vpc.main --depth 2       # 📋 (#10)
+tfstate graph state.json --address aws_vpc.main --depth 2
 
 # Diff snapshots (offline)
 tfstate diff prod_jan.json prod_feb.json                        # 📋 (#7)
@@ -234,7 +234,7 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | #7 | Diff command | ✅ `tfstate diff <file1> <file2>` |
 | #8 | Output format flags | ✅ `--format json\|plain` |
 | #9 | Get command | ✅ `tfstate get [file] <address>` |
-| #10 | Graph command | `tfstate graph <file> --address --depth` |
+| #10 | Graph command | ✅ `tfstate graph <file> --address --depth` |
 | #11 | Debug flag | `--debug` on all commands |
 | #13 | Custom workspace (-o) | `init --terraform -o <path>` |
 
@@ -260,7 +260,7 @@ Planned with the `-o` flag (#13). Lets you create a workspace from a local state
 | Find specific resources | `tfstate query [file] --type` ([cli.md](cli.md#query)) | — |
 | Compare two states | `tfstate diff <file1> <file2>` | — |
 | Write a filtered state file | `tfstate filter <file> --output <out>` | — |
-| View dependency tree | N/A | `tfstate graph <file>` |
+| View dependency tree | `tfstate graph <file>` | — |
 
 ¹ Wrap addresses in single quotes when they contain square brackets with quoted keys. This prevents the shell from stripping the inner double quotes. Applies to all `state` subcommands (`show`, `rm`, `mv`, etc.).  
 Example: `terraform -chdir=<ws> state rm 'module.rds_settings["v15"].aws_db_option_group.option_group'`
